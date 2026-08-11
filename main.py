@@ -6,29 +6,47 @@ import feedparser
 from google import genai
 
 # =========================================================
-# ASO NEWS — Auto Publisher
-# RSS → Gemini → Duplicate Check → Facebook
+# ASO NEWS — Multi Source Auto Publisher
+# BBC + Rudaw + Kurdistan24
 # =========================================================
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 FACEBOOK_PAGE_ACCESS_TOKEN = os.environ["FACEBOOK_PAGE_ACCESS_TOKEN"]
 
 PAGE_ID = "1128027710403407"
-RSS_URL = "https://feeds.bbci.co.uk/news/rss.xml"
 
 HISTORY_FILE = "posted_news.json"
+
+RSS_SOURCES = [
+    {
+        "name": "BBC News",
+        "url": "https://feeds.bbci.co.uk/news/rss.xml"
+    },
+    {
+        "name": "Rudaw",
+        "url": "https://news.google.com/rss/search?q=site%3Arudaw.net+when%3A1d&hl=en-US&gl=US&ceid=US%3Aen"
+    },
+    {
+        "name": "Kurdistan24",
+        "url": "https://news.google.com/rss/search?q=site%3Akurdistan24.net+when%3A1d&hl=en-US&gl=US&ceid=US%3Aen"
+    }
+]
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 # =========================================================
-# Read previously posted news
+# Read history
 # =========================================================
 
 if os.path.exists(HISTORY_FILE):
     try:
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             posted_news = json.load(f)
+
+        if not isinstance(posted_news, list):
+            posted_news = []
+
     except Exception:
         posted_news = []
 else:
@@ -36,92 +54,113 @@ else:
 
 
 # =========================================================
-# Get RSS news
+# Collect news from all sources
 # =========================================================
 
-feed = feedparser.parse(RSS_URL)
+all_news = []
 
-if not feed.entries:
-    print("❌ هیچ هەواڵێک نەدۆزرایەوە")
-    exit()
+for source in RSS_SOURCES:
 
-print(f"📰 {len(feed.entries)} هەواڵ دۆزرایەوە")
+    print("\n" + "=" * 60)
+    print(f"🔎 سەرچاوە: {source['name']}")
+    print("=" * 60)
 
+    try:
+        feed = feedparser.parse(source["url"])
 
-# =========================================================
-# Find a NEW news item
-# =========================================================
+        print(f"📰 {len(feed.entries)} هەواڵ دۆزرایەوە")
 
-selected_news = None
-selected_id = None
+        for item in feed.entries:
 
-for news in feed.entries:
+            title = item.get("title", "").strip()
+            summary = item.get("summary", "").strip()
+            link = item.get("link", "").strip()
 
-    title = news.get("title", "").strip()
-    link = news.get("link", "").strip()
+            if not title:
+                continue
 
-    if not title:
-        continue
+            unique_text = link if link else title
 
-    # Use RSS link as unique ID
-    unique_text = link if link else title
+            news_id = hashlib.sha256(
+                unique_text.encode("utf-8")
+            ).hexdigest()
 
-    news_id = hashlib.sha256(
-        unique_text.encode("utf-8")
-    ).hexdigest()
+            if news_id in posted_news:
+                continue
 
-    if news_id not in posted_news:
-        selected_news = news
-        selected_id = news_id
-        break
+            all_news.append({
+                "id": news_id,
+                "source": source["name"],
+                "title": title,
+                "summary": summary,
+                "link": link
+            })
+
+    except Exception as e:
+        print(f"⚠️ کێشە لە {source['name']}: {e}")
 
 
 # =========================================================
 # No new news
 # =========================================================
 
-if selected_news is None:
-    print("ℹ️ هیچ هەواڵێکی نوێ نییە.")
+if not all_news:
+    print("\nℹ️ هیچ هەواڵێکی نوێ نەدۆزرایەوە.")
     exit()
 
 
-title = selected_news.get("title", "")
-summary = selected_news.get("summary", "")
-link = selected_news.get("link", "")
-
-print("\n✅ هەواڵی نوێ دۆزرایەوە:")
-print(title)
+print("\n" + "=" * 60)
+print(f"✅ کۆی هەواڵە نوێکان: {len(all_news)}")
+print("=" * 60)
 
 
 # =========================================================
-# Gemini
+# Take the newest few candidates
 # =========================================================
+
+candidates = all_news[:10]
+
+
+# =========================================================
+# Ask Gemini to select ONE important news
+# =========================================================
+
+news_text = ""
+
+for i, item in enumerate(candidates, start=1):
+
+    news_text += f"""
+[{i}]
+سەرچاوە: {item['source']}
+سەردێڕ: {item['title']}
+پوختە: {item['summary']}
+لینک: {item['link']}
+"""
+
 
 prompt = f"""
-تۆ دەستکارێکی هەواڵی پیشەیی بۆ پەیجی ASO NEWS ـیت.
+تۆ دەستکارێکی هەواڵی پیشەیی بۆ ASO NEWS ـیت.
 
-ئەم هەواڵە بە کوردی سۆرانییەکی ڕوون و پیشەیی بنووسە.
+لە نێوان هەواڵەکانی خوارەوە تەنها یەک هەواڵ هەڵبژێرە کە
+گرنگترین و گونجاوترین هەواڵە بۆ پەیجی هەواڵیی ASO NEWS.
 
-یاساکانی زۆر گرنگ:
-
-- هیچ زانیارییەکی نوێ زیاد مەکە.
+پێش هەموو شتێک:
+- هەواڵی ڕووداوێکی گرنگ هەڵبژێرە.
+- هەواڵی بێ گرنگی و تەنها کۆمەڵایەتی مەهێنە.
+- هیچ زانیارییەکی خۆت زیاد مەکە.
 - ژمارەکان مەگۆڕە.
-- ناوی کەس مەگۆڕە.
-- ناوی شار و وڵات مەگۆڕە.
-- ڕێکەوت مەگۆڕە.
-- ڕووداوەکە مەگۆڕە.
+- ناوی کەس و شوێن مەگۆڕە.
 - شیکاری سیاسی مەکە.
-- تەنها زانیارییەکانی سەرچاوە بەکاربهێنە.
-- هەواڵەکە کورت و ڕوون بێت.
-- سەردێڕێکی ڕوون بنووسە.
+- تەنها ئەو زانیارییە بەکاربهێنە کە لە سەرچاوەکەدا هەیە.
+- ئەگەر هەواڵەکان لەسەر هەمان ڕووداون، تەنها یەکێکیان هەڵبژێرە.
 
-سەردێڕی سەرچاوە:
-{title}
+هەواڵەکان:
 
-پوختەی سەرچاوە:
-{summary}
+{news_text}
 
-فۆرماتی کۆتایی:
+لە وەڵامدا تەنها ئەم فۆرماتە بەکاربهێنە:
+
+SOURCE_NUMBER: ژمارەی هەواڵ
 
 📰 سەردێڕ
 
@@ -129,7 +168,7 @@ prompt = f"""
 
 #ASONEWS #هاشتاگ #هاشتاگ
 
-سەرچاوە: BBC News
+سەرچاوە: ناوی سەرچاوە
 """
 
 
@@ -138,7 +177,63 @@ response = client.models.generate_content(
     contents=prompt
 )
 
-post = response.text.strip()
+result = response.text.strip()
+
+print("\n" + "=" * 60)
+print("🤖 GEMINI")
+print("=" * 60)
+print(result)
+
+
+# =========================================================
+# Find selected source
+# =========================================================
+
+selected_index = None
+
+for line in result.splitlines():
+
+    line = line.strip()
+
+    if line.startswith("SOURCE_NUMBER:"):
+
+        try:
+            selected_index = int(
+                line.split(":", 1)[1].strip()
+            )
+        except ValueError:
+            selected_index = None
+
+        break
+
+
+if selected_index is None:
+    print("❌ Gemini نەیتوانی هەواڵەکە هەڵبژێرێت.")
+    exit()
+
+
+if selected_index < 1 or selected_index > len(candidates):
+    print("❌ ژمارەی هەڵبژێردراو نادروستە.")
+    exit()
+
+
+selected_news = candidates[selected_index - 1]
+
+
+# =========================================================
+# Clean Gemini output
+# =========================================================
+
+post_lines = []
+
+for line in result.splitlines():
+
+    if line.strip().startswith("SOURCE_NUMBER:"):
+        continue
+
+    post_lines.append(line)
+
+post = "\n".join(post_lines).strip()
 
 
 # =========================================================
@@ -146,10 +241,13 @@ post = response.text.strip()
 # =========================================================
 
 print("\n" + "=" * 60)
-print("📰 ASO NEWS — پۆستی نوێ")
+print("📰 ASO NEWS — پۆستی کۆتایی")
 print("=" * 60)
 print(post)
 print("=" * 60)
+
+print(f"📌 سەرچاوە: {selected_news['source']}")
+print(f"🔗 {selected_news['link']}")
 
 
 # =========================================================
@@ -163,26 +261,31 @@ facebook_response = requests.post(
     data={
         "message": post,
         "access_token": FACEBOOK_PAGE_ACCESS_TOKEN
-    }
+    },
+    timeout=30
 )
 
-print("\n📘 FACEBOOK")
+
+print("\n" + "=" * 60)
+print("📘 FACEBOOK")
+print("=" * 60)
 print("Status:", facebook_response.status_code)
 print(facebook_response.text)
 
 
 # =========================================================
-# Save news as posted ONLY after successful Facebook post
+# Save only after successful Facebook post
 # =========================================================
 
 if facebook_response.status_code == 200:
 
-    posted_news.append(selected_id)
+    posted_news.append(selected_news["id"])
 
-    # Keep only the latest 500 news IDs
+    # Keep latest 500 IDs
     posted_news = posted_news[-500:]
 
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+
         json.dump(
             posted_news,
             f,
@@ -190,10 +293,10 @@ if facebook_response.status_code == 200:
             indent=2
         )
 
-    print("\n✅ پۆستەکە بڵاوکرایەوە.")
-    print("🔐 هەمان هەواڵ لە داهاتوودا دووبارە بڵاوناکرێتەوە.")
+    print("\n✅ پۆستەکە بە سەرکەوتوویی بڵاوکرایەوە.")
+    print("🔐 هەواڵەکە وەک پۆستکراو تۆمار کرا.")
 
 else:
 
-    print("\n❌ پۆستکردن لە Facebook سەرکەوتوو نەبوو.")
-    print("⚠️ هەواڵەکە لە لیستی پۆستکراوەکان تۆمار نەکرا.")
+    print("\n❌ Facebook پۆستەکەی قبوڵ نەکرد.")
+    print("⚠️ هەواڵەکە وەک پۆستکراو تۆمار نەکرا.")
