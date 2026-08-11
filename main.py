@@ -1,26 +1,43 @@
 import os
+import json
+import hashlib
 import requests
 import feedparser
 from google import genai
 
-# ==============================
-# ASO NEWS
-# RSS → Gemini → Facebook
-# ==============================
+# =========================================================
+# ASO NEWS — Auto Publisher
+# RSS → Gemini → Duplicate Check → Facebook
+# =========================================================
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 FACEBOOK_PAGE_ACCESS_TOKEN = os.environ["FACEBOOK_PAGE_ACCESS_TOKEN"]
 
 PAGE_ID = "1128027710403407"
-
 RSS_URL = "https://feeds.bbci.co.uk/news/rss.xml"
+
+HISTORY_FILE = "posted_news.json"
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-# ==============================
-# Get news
-# ==============================
+# =========================================================
+# Read previously posted news
+# =========================================================
+
+if os.path.exists(HISTORY_FILE):
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            posted_news = json.load(f)
+    except Exception:
+        posted_news = []
+else:
+    posted_news = []
+
+
+# =========================================================
+# Get RSS news
+# =========================================================
 
 feed = feedparser.parse(RSS_URL)
 
@@ -28,40 +45,83 @@ if not feed.entries:
     print("❌ هیچ هەواڵێک نەدۆزرایەوە")
     exit()
 
-news = feed.entries[0]
+print(f"📰 {len(feed.entries)} هەواڵ دۆزرایەوە")
 
-title = news.get("title", "")
-summary = news.get("summary", "")
 
-print("📰 هەواڵ دۆزرایەوە:")
+# =========================================================
+# Find a NEW news item
+# =========================================================
+
+selected_news = None
+selected_id = None
+
+for news in feed.entries:
+
+    title = news.get("title", "").strip()
+    link = news.get("link", "").strip()
+
+    if not title:
+        continue
+
+    # Use RSS link as unique ID
+    unique_text = link if link else title
+
+    news_id = hashlib.sha256(
+        unique_text.encode("utf-8")
+    ).hexdigest()
+
+    if news_id not in posted_news:
+        selected_news = news
+        selected_id = news_id
+        break
+
+
+# =========================================================
+# No new news
+# =========================================================
+
+if selected_news is None:
+    print("ℹ️ هیچ هەواڵێکی نوێ نییە.")
+    exit()
+
+
+title = selected_news.get("title", "")
+summary = selected_news.get("summary", "")
+link = selected_news.get("link", "")
+
+print("\n✅ هەواڵی نوێ دۆزرایەوە:")
 print(title)
 
 
-# ==============================
+# =========================================================
 # Gemini
-# ==============================
+# =========================================================
 
 prompt = f"""
-تۆ دەستکارێکی هەواڵی پیشەیی بۆ ASO NEWS ـیت.
+تۆ دەستکارێکی هەواڵی پیشەیی بۆ پەیجی ASO NEWS ـیت.
 
 ئەم هەواڵە بە کوردی سۆرانییەکی ڕوون و پیشەیی بنووسە.
 
-یاساکانی گرنگ:
+یاساکانی زۆر گرنگ:
+
 - هیچ زانیارییەکی نوێ زیاد مەکە.
 - ژمارەکان مەگۆڕە.
 - ناوی کەس مەگۆڕە.
 - ناوی شار و وڵات مەگۆڕە.
+- ڕێکەوت مەگۆڕە.
 - ڕووداوەکە مەگۆڕە.
 - شیکاری سیاسی مەکە.
-- تەنها زانیاریی سەرچاوە بەکاربهێنە.
+- تەنها زانیارییەکانی سەرچاوە بەکاربهێنە.
+- هەواڵەکە کورت و ڕوون بێت.
+- سەردێڕێکی ڕوون بنووسە.
 
-سەردێڕ:
+سەردێڕی سەرچاوە:
 {title}
 
-پوختە:
+پوختەی سەرچاوە:
 {summary}
 
-تەنها ئەم فۆرماتە بەکاربهێنە:
+فۆرماتی کۆتایی:
 
 📰 سەردێڕ
 
@@ -72,6 +132,7 @@ prompt = f"""
 سەرچاوە: BBC News
 """
 
+
 response = client.models.generate_content(
     model="gemini-3.5-flash-lite",
     contents=prompt
@@ -79,33 +140,60 @@ response = client.models.generate_content(
 
 post = response.text.strip()
 
+
+# =========================================================
+# Show final post
+# =========================================================
+
 print("\n" + "=" * 60)
-print("📰 ASO NEWS — پۆستی ئامادەکراو")
+print("📰 ASO NEWS — پۆستی نوێ")
 print("=" * 60)
 print(post)
+print("=" * 60)
 
 
-# ==============================
-# Facebook
-# ==============================
+# =========================================================
+# Publish to Facebook
+# =========================================================
 
-url = f"https://graph.facebook.com/{PAGE_ID}/feed"
+facebook_url = f"https://graph.facebook.com/{PAGE_ID}/feed"
 
 facebook_response = requests.post(
-    url,
+    facebook_url,
     data={
         "message": post,
         "access_token": FACEBOOK_PAGE_ACCESS_TOKEN
     }
 )
 
-print("\n" + "=" * 60)
-print("📘 FACEBOOK")
-print("=" * 60)
+print("\n📘 FACEBOOK")
 print("Status:", facebook_response.status_code)
 print(facebook_response.text)
 
+
+# =========================================================
+# Save news as posted ONLY after successful Facebook post
+# =========================================================
+
 if facebook_response.status_code == 200:
-    print("✅ پۆستەکە بە سەرکەوتوویی بڵاوکرایەوە.")
+
+    posted_news.append(selected_id)
+
+    # Keep only the latest 500 news IDs
+    posted_news = posted_news[-500:]
+
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(
+            posted_news,
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
+
+    print("\n✅ پۆستەکە بڵاوکرایەوە.")
+    print("🔐 هەمان هەواڵ لە داهاتوودا دووبارە بڵاوناکرێتەوە.")
+
 else:
-    print("❌ هەڵە لە Facebook ڕوویدا.")
+
+    print("\n❌ پۆستکردن لە Facebook سەرکەوتوو نەبوو.")
+    print("⚠️ هەواڵەکە لە لیستی پۆستکراوەکان تۆمار نەکرا.")
