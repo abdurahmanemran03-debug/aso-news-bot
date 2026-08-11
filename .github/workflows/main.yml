@@ -5,6 +5,9 @@ on:
     - cron: "*/30 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   publish-news:
     runs-on: ubuntu-latest
@@ -12,6 +15,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -28,3 +33,20 @@ jobs:
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
         run: |
           python main.py
+
+      - name: Save news history
+        run: |
+          if [ -f posted_news.json ]; then
+            git config user.name "ASO NEWS Bot"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add posted_news.json
+
+            if ! git diff --cached --quiet; then
+              git commit -m "Update posted news history"
+              git push
+            else
+              echo "No history changes to save."
+            fi
+          else
+            echo "posted_news.json was not created."
+          fi
