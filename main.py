@@ -4,7 +4,6 @@ import hashlib
 import re
 import html
 from urllib.parse import urljoin
-from datetime import datetime, timezone
 
 import requests
 import feedparser
@@ -23,30 +22,37 @@ FACEBOOK_PAGE_ACCESS_TOKEN = os.environ["FACEBOOK_PAGE_ACCESS_TOKEN"]
 PAGE_ID = "1128027710403407"
 
 HISTORY_FILE = "posted_news.json"
-GEMINI_MODEL = "gemini-3.5-flash-lite"
+
+# بەو مۆدێلەی ئێستا لە پڕۆژەکەت بەکاری دەهێنیت بیهێڵەوە
+GEMINI_MODEL = "gemini-3.5-flash"
 
 MAX_HISTORY = 1000
-MAX_CANDIDATES = 12
+MAX_CANDIDATES = 10
 
-# The ASO NEWS watermark file in GitHub.
+FACEBOOK_PHOTO_URL = (
+    f"https://graph.facebook.com/{PAGE_ID}/photos"
+)
+
+# لۆگۆی بێ پشتەوە
 LOGO_FILE = "logo.png"
 
-FACEBOOK_PHOTO_URL = f"https://graph.facebook.com/{PAGE_ID}/photos"
-FACEBOOK_VIDEO_URL = f"https://graph.facebook.com/{PAGE_ID}/videos"
-
 
 # =========================================================
-# NEWS SOURCES
+# RSS SOURCES
 # =========================================================
-# More sources = ASO NEWS identity, not BBC-only.
+
 RSS_SOURCES = [
+    {
+        "name": "BBC News",
+        "url": "https://feeds.bbci.co.uk/news/rss.xml"
+    },
     {
         "name": "Rudaw",
         "url": (
             "https://news.google.com/rss/search?"
             "q=site%3Arudaw.net+when%3A1d"
             "&hl=en-US&gl=US&ceid=US%3Aen"
-        ),
+        )
     },
     {
         "name": "Kurdistan24",
@@ -54,57 +60,34 @@ RSS_SOURCES = [
             "https://news.google.com/rss/search?"
             "q=site%3Akurdistan24.net+when%3A1d"
             "&hl=en-US&gl=US&ceid=US%3Aen"
-        ),
-    },
-    {
-        "name": "Al Jazeera",
-        "url": "https://www.aljazeera.com/xml/rss/all.xml",
-    },
-    {
-        "name": "DW",
-        "url": "https://rss.dw.com/rdf/rss-en-all",
-    },
-    {
-        "name": "France 24",
-        "url": "https://www.france24.com/en/rss",
-    },
-    {
-        "name": "Reuters",
-        "url": (
-            "https://news.google.com/rss/search?"
-            "q=site%3Areuters.com+when%3A1d"
-            "&hl=en-US&gl=US&ceid=US%3Aen"
-        ),
-    },
-    {
-        "name": "AP News",
-        "url": (
-            "https://news.google.com/rss/search?"
-            "q=site%3Aapnews.com+when%3A1d"
-            "&hl=en-US&gl=US&ceid=US%3Aen"
-        ),
-    },
-    {
-        "name": "BBC News",
-        "url": "https://feeds.bbci.co.uk/news/rss.xml",
-    },
+        )
+    }
 ]
 
 
 # =========================================================
-# HTTP + GEMINI
+# HTTP SESSION
 # =========================================================
 
 session = requests.Session()
+
 session.headers.update({
     "User-Agent": (
-        "Mozilla/5.0 (Linux; Android 14) "
+        "Mozilla/5.0 (X11; Linux x86_64) "
         "AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
+        "(KHTML, like Gecko) "
+        "Chrome/124.0 Safari/537.36"
     )
 })
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+
+# =========================================================
+# GEMINI
+# =========================================================
+
+client = genai.Client(
+    api_key=GEMINI_API_KEY
+)
 
 
 # =========================================================
@@ -112,6 +95,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # =========================================================
 
 def load_history():
+
     if not os.path.exists(HISTORY_FILE):
         return []
 
@@ -119,17 +103,22 @@ def load_history():
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        return data if isinstance(data, list) else []
+        if isinstance(data, list):
+            return data
 
     except Exception as e:
-        print(f"⚠️ کێشە لە history: {e}")
-        return []
+        print(f"⚠️ کێشە لە خوێندنەوەی history: {e}")
+
+    return []
 
 
 def save_history(history):
+
+    history = history[-MAX_HISTORY:]
+
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(
-            history[-MAX_HISTORY:],
+            history,
             f,
             ensure_ascii=False,
             indent=2
@@ -140,65 +129,78 @@ posted_news = load_history()
 
 
 # =========================================================
-# TEXT + IDS
+# TEXT CLEANING
 # =========================================================
 
 def clean_text(text):
+
     if not text:
         return ""
 
     text = html.unescape(text)
+
     text = re.sub(r"<[^>]+>", " ", text)
+
     text = re.sub(r"\s+", " ", text)
 
     return text.strip()
 
 
+# =========================================================
+# NEWS ID
+# =========================================================
+
 def create_news_id(title, link):
-    title = re.sub(r"\s+", " ", title.lower().strip())
-    base = link.strip() if link.strip() else title
+
+    normalized_title = re.sub(
+        r"\s+",
+        " ",
+        title.lower().strip()
+    )
+
+    base = (
+        link.strip()
+        if link.strip()
+        else normalized_title
+    )
 
     return hashlib.sha256(
-        f"{base}|{title}".encode("utf-8")
+        f"{base}|{normalized_title}".encode("utf-8")
     ).hexdigest()
 
 
-def entry_date(entry):
-    try:
-        if entry.get("published_parsed"):
-            return datetime(
-                *entry.published_parsed[:6],
-                tzinfo=timezone.utc
-            )
-
-        if entry.get("updated_parsed"):
-            return datetime(
-                *entry.updated_parsed[:6],
-                tzinfo=timezone.utc
-            )
-    except Exception:
-        pass
-
-    return datetime(1970, 1, 1, tzinfo=timezone.utc)
-
-
 # =========================================================
-# MEDIA URLS
+# IMAGE URL EXTRACTION
 # =========================================================
 
 def get_rss_image(entry):
-    for media in entry.get("media_content", []):
-        if media.get("url"):
-            return media["url"]
 
-    for media in entry.get("media_thumbnail", []):
-        if media.get("url"):
-            return media["url"]
+    media_content = entry.get("media_content")
 
-    for enclosure in entry.get("enclosures", []):
-        url = enclosure.get("href") or enclosure.get("url")
-        if url and "image" in enclosure.get("type", "").lower():
-            return url
+    if media_content:
+        for media in media_content:
+            url = media.get("url")
+            if url:
+                return url
+
+    media_thumbnail = entry.get("media_thumbnail")
+
+    if media_thumbnail:
+        for media in media_thumbnail:
+            url = media.get("url")
+            if url:
+                return url
+
+    enclosures = entry.get("enclosures")
+
+    if enclosures:
+        for enclosure in enclosures:
+            url = (
+                enclosure.get("href")
+                or enclosure.get("url")
+            )
+            if url:
+                return url
 
     raw = (
         entry.get("summary", "")
@@ -212,30 +214,23 @@ def get_rss_image(entry):
         re.IGNORECASE
     )
 
-    return matches[0] if matches else None
-
-
-def get_rss_video(entry):
-    for enclosure in entry.get("enclosures", []):
-        url = enclosure.get("href") or enclosure.get("url")
-        media_type = enclosure.get("type", "").lower()
-
-        if url and (
-            "video" in media_type
-            or url.lower().split("?")[0].endswith(
-                (".mp4", ".mov", ".webm", ".m4v")
-            )
-        ):
-            return url
+    if matches:
+        return matches[0]
 
     return None
 
 
-def get_article_media(article_url):
+# =========================================================
+# ARTICLE PAGE IMAGE
+# =========================================================
+
+def get_article_images(article_url):
+
     if not article_url:
-        return [], []
+        return []
 
     try:
+
         response = session.get(
             article_url,
             timeout=25,
@@ -243,76 +238,96 @@ def get_article_media(article_url):
         )
 
         if response.status_code != 200:
-            return [], []
+            return []
 
         page = response.text
+
         images = []
-        videos = []
 
         patterns = [
             r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
             r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+            r'<meta[^>]+property=["\']og:image:url["\'][^>]+content=["\']([^"\']+)',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image:url["\']',
             r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
         ]
 
         for pattern in patterns:
-            for match in re.findall(pattern, page, re.IGNORECASE):
-                url = urljoin(
+
+            matches = re.findall(
+                pattern,
+                page,
+                re.IGNORECASE
+            )
+
+            for match in matches:
+
+                image_url = html.unescape(match.strip())
+
+                image_url = urljoin(
                     response.url,
-                    html.unescape(match.strip())
+                    image_url
                 )
 
-                if url.startswith("http") and url not in images:
-                    images.append(url)
+                if (
+                    image_url.startswith("http")
+                    and image_url not in images
+                ):
+                    images.append(image_url)
 
-        for match in re.findall(
+        html_images = re.findall(
             r'<img[^>]+(?:src|data-src)=["\']([^"\']+)',
             page,
             re.IGNORECASE
-        ):
-            url = urljoin(
-                response.url,
-                html.unescape(match.strip())
+        )
+
+        for image_url in html_images:
+
+            image_url = html.unescape(
+                image_url.strip()
             )
 
-            if url.startswith("http") and url not in images:
-                images.append(url)
-
-        for match in re.findall(
-            r'<(?:video|source)[^>]+src=["\']([^"\']+)',
-            page,
-            re.IGNORECASE
-        ):
-            url = urljoin(
+            image_url = urljoin(
                 response.url,
-                html.unescape(match.strip())
+                image_url
             )
 
             if (
-                url.startswith("http")
-                and url.lower().split("?")[0].endswith(
-                    (".mp4", ".mov", ".webm", ".m4v")
-                )
-                and url not in videos
+                image_url.startswith("http")
+                and image_url not in images
             ):
-                videos.append(url)
+                images.append(image_url)
 
-        return images[:20], videos[:10]
+        return images[:20]
 
     except Exception as e:
-        print(f"⚠️ کێشە لە پشکنینی پەڕەی هەواڵ: {e}")
-        return [], []
+
+        print(
+            f"⚠️ کێشە لە پشکنینی پەڕەی هەواڵ: {e}"
+        )
+
+        return []
 
 
 # =========================================================
-# IMAGE DOWNLOAD
+# DOWNLOAD + QUALITY CHECK
 # =========================================================
 
-def download_best_image(candidates):
+def download_best_image(
+    candidates,
+    filename="news_image.jpg"
+):
+
     best = None
 
     for image_url in candidates:
+
+        if not image_url:
+            continue
+
         try:
+
             print(f"🔎 پشکنینی وێنە: {image_url}")
 
             response = session.get(
@@ -323,174 +338,275 @@ def download_best_image(candidates):
             if response.status_code != 200:
                 continue
 
-            if "image" not in response.headers.get(
-                "content-type", ""
-            ).lower():
+            content_type = response.headers.get(
+                "content-type",
+                ""
+            ).lower()
+
+            if "image" not in content_type:
                 continue
 
-            data = response.content
+            image_data = response.content
 
-            if len(data) < 30000:
+            if len(image_data) < 30_000:
+                print("⛔ وێنەکە زۆر بچووکە.")
                 continue
 
-            image = Image.open(BytesIO(data))
+            image = Image.open(
+                BytesIO(image_data)
+            )
+
             width, height = image.size
 
-            print(f"📐 {width}x{height}")
+            print(f"📐 قەبارە: {width}x{height}")
 
             if width < 800 or height < 450:
+                print(
+                    "⛔ قەبارەی وێنەکە بۆ پۆستی هەواڵ کەمە."
+                )
                 continue
 
-            score = width * height + len(data) / 100
+            score = (
+                width * height
+                + len(image_data) / 100
+            )
 
             if best is None or score > best["score"]:
+
                 best = {
-                    "data": data,
-                    "score": score,
+                    "url": image_url,
+                    "data": image_data,
                     "width": width,
-                    "height": height
+                    "height": height,
+                    "score": score
                 }
 
         except Exception as e:
-            print(f"⚠️ نەتوانرا وێنەکە پشکنرێت: {e}")
+
+            print(
+                f"⚠️ نەتوانرا وێنەکە پشکنرێت: {e}"
+            )
 
     if best is None:
+
+        print(
+            "❌ هیچ وێنەیەکی کوالێتی باش نەدۆزرایەوە."
+        )
+
         return None
 
     try:
+
         image = Image.open(
             BytesIO(best["data"])
-        ).convert("RGB")
+        )
+
+        if image.mode != "RGB":
+            image = image.convert("RGB")
 
         image.save(
-            "news_image.jpg",
+            filename,
             "JPEG",
             quality=95,
             optimize=True
         )
 
-        return "news_image.jpg"
+        print("\n✅ باشترین وێنە هەڵبژێردرا:")
+        print(f"📐 {best['width']}x{best['height']}")
+        print(f"💾 {len(best['data']) / 1024:.1f} KB")
+
+        return filename
 
     except Exception as e:
-        print(f"❌ هەڵە لە پاشەکەوتکردنی وێنە: {e}")
+
+        print(
+            f"❌ هەڵە لە پاشەکەوتکردنی وێنە: {e}"
+        )
+
         return None
 
 
 # =========================================================
-# ASO NEWS WATERMARK
+# WATERMARK — ASO NEWS LOGO
 # =========================================================
 
-def add_aso_logo(image_path):
-    if not os.path.exists(LOGO_FILE):
+def add_logo_watermark(
+    image_path,
+    logo_path=LOGO_FILE
+):
+
+    if not os.path.exists(logo_path):
+
         print(
-            "⚠️ logo.png نەدۆزرایەوە؛ "
-            "پۆستەکە بەبێ watermark دەچێت."
+            f"⚠️ لۆگۆ نەدۆزرایەوە: {logo_path}"
         )
+
         return image_path
 
     try:
-        base = Image.open(image_path).convert("RGBA")
-        logo = Image.open(LOGO_FILE).convert("RGBA")
 
+        base = Image.open(
+            image_path
+        ).convert("RGBA")
+
+        logo = Image.open(
+            logo_path
+        ).convert("RGBA")
+
+        # Remove empty transparent area around logo
+        alpha = logo.getchannel("A")
+        bbox = alpha.getbbox()
+
+        if bbox:
+            logo = logo.crop(bbox)
+
+        # Logo = about 10% of image width
         target_width = max(
-            120,
-            int(base.width * 0.16)
+            90,
+            int(base.width * 0.10)
         )
 
-        ratio = target_width / logo.width
+        ratio = (
+            target_width / logo.width
+        )
+
+        target_height = max(
+            1,
+            int(logo.height * ratio)
+        )
 
         logo = logo.resize(
-            (
-                target_width,
-                max(1, int(logo.height * ratio))
-            ),
-            Image.LANCZOS
+            (target_width, target_height),
+            Image.Resampling.LANCZOS
         )
 
-        # 92% opacity.
+        # Slightly transparent watermark
         alpha = logo.getchannel("A")
-        alpha = alpha.point(lambda p: int(p * 0.92))
+        alpha = alpha.point(
+            lambda p: int(p * 0.82)
+        )
         logo.putalpha(alpha)
 
+        # Bottom-right with safe margin
         margin = max(
             18,
-            int(base.width * 0.025)
+            int(base.width * 0.018)
         )
 
         x = base.width - logo.width - margin
         y = base.height - logo.height - margin
 
-        base.alpha_composite(
+        layer = Image.new(
+            "RGBA",
+            base.size,
+            (0, 0, 0, 0)
+        )
+
+        layer.alpha_composite(
             logo,
             (x, y)
         )
 
-        base.convert("RGB").save(
-            "news_image_branded.jpg",
+        result = Image.alpha_composite(
+            base,
+            layer
+        )
+
+        result.convert("RGB").save(
+            image_path,
             "JPEG",
             quality=95,
             optimize=True
         )
 
-        print("✅ لۆگۆی ASO NEWS زیاد کرا.")
+        print(
+            "✅ لۆگۆ بە شێوەی watermark ـی پاک زیاد کرا."
+        )
 
-        return "news_image_branded.jpg"
+        return image_path
 
     except Exception as e:
-        print(f"⚠️ watermark نەکرا: {e}")
+
+        print(
+            f"⚠️ کێشە لە زیادکردنی لۆگۆ: {e}"
+        )
+
         return image_path
 
 
 # =========================================================
-# FIND MEDIA
+# FIND BEST IMAGE
 # =========================================================
 
-def find_media(entry):
-    images = []
-    videos = []
+def find_best_image(entry):
 
-    image = get_rss_image(entry)
-    video = get_rss_video(entry)
+    candidates = []
 
-    if image:
-        images.append(image)
+    rss_image = get_rss_image(entry)
 
-    if video:
-        videos.append(video)
+    if rss_image:
+        candidates.append(rss_image)
 
-    link = entry.get("link", "").strip()
+    article_url = entry.get(
+        "link",
+        ""
+    ).strip()
 
-    if link:
-        article_images, article_videos = get_article_media(link)
-        images.extend(article_images)
-        videos.extend(article_videos)
+    if article_url:
 
-    return (
-        list(dict.fromkeys(images)),
-        list(dict.fromkeys(videos))
+        article_images = get_article_images(
+            article_url
+        )
+
+        candidates.extend(article_images)
+
+    unique_candidates = []
+
+    for url in candidates:
+
+        if url and url not in unique_candidates:
+            unique_candidates.append(url)
+
+    image_path = download_best_image(
+        unique_candidates
+    )
+
+    if not image_path:
+        return None
+
+    return add_logo_watermark(
+        image_path
     )
 
 
 # =========================================================
-# NEWS COLLECTION
+# COLLECT NEWS
 # =========================================================
 
 def collect_news():
+
     all_news = []
 
     for source in RSS_SOURCES:
+
         print("\n" + "=" * 60)
-        print(f"🔎 سەرچاوە: {source['name']}")
+        print(
+            f"🔎 سەرچاوە: {source['name']}"
+        )
         print("=" * 60)
 
         try:
-            feed = feedparser.parse(source["url"])
+
+            feed = feedparser.parse(
+                source["url"]
+            )
 
             print(
                 f"📰 {len(feed.entries)} هەواڵ دۆزرایەوە"
             )
 
             for item in feed.entries:
+
                 title = clean_text(
                     item.get("title", "")
                 )
@@ -521,79 +637,31 @@ def collect_news():
                     "title": title,
                     "summary": summary,
                     "link": link,
-                    "entry": item,
-                    "date": entry_date(item)
+                    "entry": item
                 })
 
         except Exception as e:
+
             print(
                 f"⚠️ کێشە لە {source['name']}: {e}"
             )
-
-    all_news.sort(
-        key=lambda x: x["date"],
-        reverse=True
-    )
 
     return all_news
 
 
 # =========================================================
-# SOURCE DIVERSITY
-# =========================================================
-
-def diverse_candidates(all_news):
-    by_source = {}
-
-    for item in all_news:
-        by_source.setdefault(
-            item["source"],
-            []
-        ).append(item)
-
-    # Maximum 3 candidates per source.
-    for source in by_source:
-        by_source[source] = by_source[source][:3]
-
-    result = []
-    round_number = 0
-    sources = list(by_source.keys())
-
-    while len(result) < MAX_CANDIDATES:
-        added = False
-
-        for source in sources:
-            items = by_source[source]
-
-            if round_number < len(items):
-                result.append(
-                    items[round_number]
-                )
-
-                added = True
-
-                if len(result) >= MAX_CANDIDATES:
-                    break
-
-        if not added:
-            break
-
-        round_number += 1
-
-    return result
-
-
-# =========================================================
-# GEMINI WRITER
+# GEMINI NEWS WRITER
 # =========================================================
 
 def generate_news_post(candidates):
+
     news_text = ""
 
     for i, item in enumerate(
         candidates,
         start=1
     ):
+
         news_text += f"""
 [{i}]
 سەرچاوە: {item['source']}
@@ -605,32 +673,41 @@ def generate_news_post(candidates):
     prompt = f"""
 تۆ دەستکارێکی هەواڵی پیشەیی بۆ ASO NEWS ـیت.
 
-لە نێوان هەواڵەکانی خوارەوە تەنها یەک هەواڵ هەڵبژێرە
-و بە کوردی سۆرانیی ڕەوان و بێ هەڵەی تایپی بیگۆڕە بۆ پۆستی Facebook.
+لە نێوان هەواڵەکانی خوارەوە تەنها یەک هەواڵ
+هەڵبژێرە و بە کوردی سۆرانیی ڕەوان و
+بێ هەڵەی تایپی بیگۆڕە بۆ پۆستی Facebook.
 
 یاساکان:
+
 - هیچ زانیارییەکی خۆت زیاد مەکە.
 - هیچ شتێک مەخەمنە.
 - ژمارە و بەروارەکان مەگۆڕە.
 - ناوی کەس و شوێن مەگۆڕە.
 - شیکاری سیاسی مەکە.
+- هەواڵەکە بە کوردی سۆرانیی سروشتی بنووسە.
 - سەردێڕ کورت و ڕوون بێت.
-- دەقەکە کورت و زانیاری‌دار بێت.
+- BODY کورت بێت، تەنها سەرەکیترین زانیارییەکان.
+- FULL_BODY درێژتر بێت و هەموو زانیارییە
+  پشتڕاستکراوەکانی پوختەکە بگرێتەوە.
+- FULL_BODY دەبێت 2 تا 4 پاراگراف بێت.
+- هیچ زانیارییەکی زیادکراو لە FULL_BODY مەهێنە.
 - ئەگەر هەمان ڕووداو لە چەند سەرچاوەیەکدا هەبوو،
   تەنها یەکێکیان هەڵبژێرە.
-- سەرچاوەکە بە دروستی بنووسە.
-- هەوڵ بدە سەرچاوەکان جۆراوجۆر بن، نەک تەنها BBC.
 
-فۆرمات:
+فۆرماتی وەڵام:
+
 SOURCE_NUMBER: ژمارە
 
 TITLE: سەردێڕ
 
 BODY:
-دەقی هەواڵ
+دەقی کورت بۆ پۆستی سەرەکی
+
+FULL_BODY:
+دەقی درێژتر بۆ کۆمێنتی یەکەم
 
 HASHTAGS:
-#ASONEWS #هەواڵ #کوردستان
+#ASONEWS #کوردستان #هەواڵ
 
 SOURCE:
 ناوی سەرچاوە
@@ -638,10 +715,12 @@ SOURCE:
 هیچ دەقێکی تر زیاد مەکە.
 
 هەواڵەکان:
+
 {news_text}
 """
 
     try:
+
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt
@@ -650,7 +729,11 @@ SOURCE:
         return response.text.strip()
 
     except Exception as e:
-        print(f"❌ کێشە لە Gemini: {e}")
+
+        print(
+            f"❌ کێشە لە Gemini: {e}"
+        )
+
         return None
 
 
@@ -659,6 +742,7 @@ SOURCE:
 # =========================================================
 
 def parse_gemini_result(result):
+
     if not result:
         return None
 
@@ -675,7 +759,13 @@ def parse_gemini_result(result):
     )
 
     body_match = re.search(
-        r"BODY:\s*(.*?)(?=\nHASHTAGS:)",
+        r"BODY:\s*(.*?)(?=\nFULL_BODY:)",
+        result,
+        re.IGNORECASE | re.DOTALL
+    )
+
+    full_body_match = re.search(
+        r"FULL_BODY:\s*(.*?)(?=\nHASHTAGS:)",
         result,
         re.IGNORECASE | re.DOTALL
     )
@@ -686,7 +776,7 @@ def parse_gemini_result(result):
         re.IGNORECASE | re.DOTALL
     )
 
-    source_name_match = re.search(
+    source_match_name = re.search(
         r"SOURCE:\s*(.+)",
         result,
         re.IGNORECASE
@@ -696,10 +786,13 @@ def parse_gemini_result(result):
         return None
 
     try:
+
         source_number = int(
             source_match.group(1)
         )
+
     except ValueError:
+
         return None
 
     title = (
@@ -714,6 +807,12 @@ def parse_gemini_result(result):
         else ""
     )
 
+    full_body = (
+        full_body_match.group(1).strip()
+        if full_body_match
+        else body
+    )
+
     hashtags = (
         hashtags_match.group(1).strip()
         if hashtags_match
@@ -721,8 +820,8 @@ def parse_gemini_result(result):
     )
 
     source_name = (
-        source_name_match.group(1).strip()
-        if source_name_match
+        source_match_name.group(1).strip()
+        if source_match_name
         else ""
     )
 
@@ -733,12 +832,18 @@ def parse_gemini_result(result):
         "source_number": source_number,
         "title": title,
         "body": body,
+        "full_body": full_body,
         "hashtags": hashtags,
         "source_name": source_name
     }
 
 
+# =========================================================
+# BUILD POST
+# =========================================================
+
 def build_post(parsed):
+
     return (
         f"📰 {parsed['title']}\n\n"
         f"{parsed['body']}\n\n"
@@ -747,12 +852,23 @@ def build_post(parsed):
     )
 
 
+def build_first_comment(parsed):
+
+    return (
+        f"📌 درێژەی هەواڵ:\n\n"
+        f"{parsed['full_body']}\n\n"
+        f"سەرچاوە: {parsed['source_name']}"
+    )
+
+
 # =========================================================
-# FACEBOOK PHOTO
+# FACEBOOK
 # =========================================================
 
 def publish_photo(image_path, message):
+
     try:
+
         with open(
             image_path,
             "rb"
@@ -772,135 +888,71 @@ def publish_photo(image_path, message):
                     "access_token":
                         FACEBOOK_PAGE_ACCESS_TOKEN
                 },
-                timeout=90
+                timeout=60
             )
 
+        print("\n" + "=" * 60)
+        print("📘 FACEBOOK PHOTO POST")
+        print("=" * 60)
+
         print(
-            "📘 Facebook photo:",
+            "Status:",
             response.status_code
         )
 
-        print(response.text)
+        print(
+            response.text
+        )
 
         return response
 
     except Exception as e:
+
         print(
-            f"❌ کێشە لە Facebook photo: {e}"
+            f"❌ کێشە لە Facebook: {e}"
         )
 
         return None
 
 
-# =========================================================
-# VIDEO
-# =========================================================
+def publish_first_comment(post_id, comment):
 
-def download_video(
-    video_url,
-    filename="news_video.mp4"
-):
     try:
-        print(
-            f"🎥 هەوڵی داگرتنی ڤیدیۆ: {video_url}"
+
+        url = (
+            f"https://graph.facebook.com/"
+            f"{post_id}/comments"
         )
 
-        response = session.get(
-            video_url,
-            timeout=120,
-            stream=True
+        response = requests.post(
+            url,
+            data={
+                "message": comment,
+                "access_token":
+                    FACEBOOK_PAGE_ACCESS_TOKEN
+            },
+            timeout=60
         )
 
-        if response.status_code != 200:
-            return None
-
-        content_type = response.headers.get(
-            "content-type",
-            ""
-        ).lower()
-
-        is_direct_file = video_url.lower().split("?")[0].endswith(
-            (".mp4", ".mov", ".webm", ".m4v")
-        )
-
-        if "video" not in content_type and not is_direct_file:
-            return None
-
-        total = 0
-
-        with open(
-            filename,
-            "wb"
-        ) as f:
-
-            for chunk in response.iter_content(
-                chunk_size=1024 * 1024
-            ):
-                if not chunk:
-                    continue
-
-                total += len(chunk)
-
-                # Maximum 100 MB.
-                if total > 100 * 1024 * 1024:
-                    return None
-
-                f.write(chunk)
-
-        if total < 50000:
-            return None
+        print("\n" + "=" * 60)
+        print("💬 FACEBOOK FIRST COMMENT")
+        print("=" * 60)
 
         print(
-            f"✅ ڤیدیۆ داگیرا: "
-            f"{total / 1024 / 1024:.1f} MB"
-        )
-
-        return filename
-
-    except Exception as e:
-        print(
-            f"⚠️ کێشە لە ڤیدیۆ: {e}"
-        )
-
-        return None
-
-
-def publish_video(video_path, message):
-    try:
-        with open(
-            video_path,
-            "rb"
-        ) as video_file:
-
-            response = requests.post(
-                FACEBOOK_VIDEO_URL,
-                files={
-                    "source": (
-                        "ASO_NEWS.mp4",
-                        video_file,
-                        "video/mp4"
-                    )
-                },
-                data={
-                    "description": message,
-                    "access_token":
-                        FACEBOOK_PAGE_ACCESS_TOKEN
-                },
-                timeout=180
-            )
-
-        print(
-            "🎥 Facebook video:",
+            "Status:",
             response.status_code
         )
 
-        print(response.text)
+        print(
+            response.text
+        )
 
         return response
 
     except Exception as e:
+
         print(
-            f"❌ کێشە لە Facebook video: {e}"
+            f"❌ کێشە لە کۆمێنت: {e}"
         )
 
         return None
@@ -911,6 +963,7 @@ def publish_video(video_path, message):
 # =========================================================
 
 def main():
+
     print("\n" + "=" * 60)
     print("🇹🇯 ASO NEWS — AUTO PUBLISHER")
     print("=" * 60)
@@ -918,28 +971,18 @@ def main():
     all_news = collect_news()
 
     if not all_news:
+
         print(
             "ℹ️ هیچ هەواڵێکی نوێ نییە."
         )
+
         return
 
     print(
         f"✅ {len(all_news)} هەواڵی نوێ دۆزرایەوە."
     )
 
-    candidates = diverse_candidates(
-        all_news
-    )
-
-    print("\n📊 هەواڵەکانی Gemini:")
-    for i, item in enumerate(
-        candidates,
-        start=1
-    ):
-        print(
-            f"{i}. [{item['source']}] "
-            f"{item['title']}"
-        )
+    candidates = all_news[:MAX_CANDIDATES]
 
     result = generate_news_post(
         candidates
@@ -958,22 +1001,24 @@ def main():
     )
 
     if not parsed:
+
         print(
             "❌ Gemini result نادروستە."
         )
+
         return
 
-    selected_index = parsed[
-        "source_number"
-    ]
+    selected_index = parsed["source_number"]
 
     if (
         selected_index < 1
         or selected_index > len(candidates)
     ):
+
         print(
             "❌ ژمارەی هەڵبژێردراو نادروستە."
         )
+
         return
 
     selected_news = candidates[
@@ -984,64 +1029,87 @@ def main():
         parsed
     )
 
+    first_comment = build_first_comment(
+        parsed
+    )
+
     print("\n" + "=" * 60)
     print("📰 ASO NEWS — FINAL POST")
     print("=" * 60)
     print(post)
 
-    # -----------------------------------------------------
-    # Find media
-    # -----------------------------------------------------
+    print("\n" + "=" * 60)
+    print("💬 FIRST COMMENT")
+    print("=" * 60)
+    print(first_comment)
 
-    print("\n📸/🎥 بەدوای میدیادا دەگەڕێین...")
+    print("\n" + "=" * 60)
+    print("📸 بەدوای باشترین وێنەدا دەگەڕێین...")
+    print("=" * 60)
 
-    image_candidates, video_candidates = find_media(
+    image_path = find_best_image(
         selected_news["entry"]
     )
 
-    facebook_response = None
+    if not image_path:
 
-    # Prefer a direct video if the source exposes one.
-    if video_candidates:
-        video_path = download_video(
-            video_candidates[0]
+        print(
+            "⛔ هیچ وێنەیەکی کوالێتی باش نەدۆزرایەوە."
         )
 
-        if video_path:
-            facebook_response = publish_video(
-                video_path,
-                post
-            )
+        return
 
-    # Otherwise use a branded photo.
-    if facebook_response is None:
-        image_path = download_best_image(
-            image_candidates
-        )
-
-        if not image_path:
-            print(
-                "⛔ هیچ وێنەیەکی کوالێتی باش نەدۆزرایەوە."
-            )
-            return
-
-        branded_image = add_aso_logo(
-            image_path
-        )
-
-        facebook_response = publish_photo(
-            branded_image,
-            post
-        )
-
-    # -----------------------------------------------------
-    # Save history only after successful Facebook post.
-    # -----------------------------------------------------
+    facebook_response = publish_photo(
+        image_path,
+        post
+    )
 
     if (
         facebook_response
         and facebook_response.status_code == 200
     ):
+
+        try:
+
+            facebook_data = (
+                facebook_response.json()
+            )
+
+        except Exception:
+
+            facebook_data = {}
+
+        # /photos زۆرجار post_id دەگەڕێنێتەوە
+        post_id = (
+            facebook_data.get("post_id")
+            or facebook_data.get("id")
+        )
+
+        if post_id:
+
+            comment_response = publish_first_comment(
+                post_id,
+                first_comment
+            )
+
+            if (
+                comment_response
+                and comment_response.status_code == 200
+            ):
+                print(
+                    "\n✅ کۆمێنتی یەکەمیش بە سەرکەوتوویی زیاد کرا."
+                )
+            else:
+                print(
+                    "\n⚠️ پۆست کرا، بەڵام کۆمێنتی یەکەم نەکرا."
+                )
+
+        else:
+
+            print(
+                "\n⚠️ پۆست کرا، بەڵام Facebook post_id نەگەڕاندەوە."
+            )
+
         posted_news.append(
             selected_news["id"]
         )
@@ -1055,24 +1123,18 @@ def main():
         )
 
     else:
+
         print(
             "\n❌ Facebook پۆستەکەی قبوڵ نەکرد."
         )
 
-    # -----------------------------------------------------
-    # Cleanup
-    # -----------------------------------------------------
+    try:
 
-    for filename in [
-        "news_image.jpg",
-        "news_image_branded.jpg",
-        "news_video.mp4"
-    ]:
-        try:
-            if os.path.exists(filename):
-                os.remove(filename)
-        except Exception:
-            pass
+        if os.path.exists("news_image.jpg"):
+            os.remove("news_image.jpg")
+
+    except Exception:
+        pass
 
 
 # =========================================================
