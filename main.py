@@ -2201,7 +2201,7 @@ def publish_photo(
         return None
 
 
-# =========================================================
+=========================================================
 # 🎥 FACEBOOK VIDEO POST
 # =========================================================
 
@@ -2235,4 +2235,422 @@ def publish_video(
         response = session.post(
             FACEBOOK_VIDEO_URL,
             data={
-                "
+                "access_token":
+                    FACEBOOK_PAGE_ACCESS_TOKEN,
+                "file_url":
+                    video_url,
+                "description":
+                    message,
+            },
+            timeout=90
+        )
+
+        print(
+            f"Status: {response.status_code}"
+        )
+
+        print(
+            response.text
+        )
+
+        if response.status_code == 200:
+
+            try:
+
+                data = response.json()
+
+            except Exception:
+
+                data = {}
+
+            return (
+                data.get("id")
+                or data.get("post_id")
+            )
+
+    except Exception as e:
+
+        print(
+            f"⚠️ Facebook video error: {e}"
+        )
+
+    return None
+
+
+# =========================================================
+# 💬 FACEBOOK FIRST COMMENT
+# =========================================================
+
+def publish_first_comment(
+    post_id,
+    comment
+):
+
+    if not post_id:
+
+        return False
+
+    print(
+        "\n============================================================"
+    )
+
+    print(
+        "💬 FIRST COMMENT"
+    )
+
+    try:
+
+        url = (
+            f"https://graph.facebook.com/"
+            f"{GRAPH_VERSION}/"
+            f"{post_id}/comments"
+        )
+
+        response = session.post(
+            url,
+            data={
+                "access_token":
+                    FACEBOOK_PAGE_ACCESS_TOKEN,
+                "message":
+                    comment,
+            },
+            timeout=30
+        )
+
+        print(
+            f"Status: {response.status_code}"
+        )
+
+        print(
+            response.text
+        )
+
+        if response.status_code == 200:
+
+            print(
+                "✅ First comment posted."
+            )
+
+            return True
+
+        print(
+            "⚠️ پۆست کرا، بەڵام کۆمێنتی یەکەم نەکرا."
+        )
+
+        return False
+
+    except Exception as e:
+
+        print(
+            f"⚠️ comment error: {e}"
+        )
+
+        return False
+
+
+# =========================================================
+# 💾 RECORD POST
+# =========================================================
+
+def record_post(
+    news,
+    post_id
+):
+
+    record = {
+
+        "id": news.get(
+            "id"
+        ),
+
+        "title": news.get(
+            "title",
+            ""
+        ),
+
+        "kur_title": news.get(
+            "kur_title",
+            ""
+        ),
+
+        "source": news.get(
+            "source",
+            ""
+        ),
+
+        "link": news.get(
+            "link",
+            ""
+        ),
+
+        "post_id": post_id,
+
+        "timestamp": int(
+            time.time()
+        ),
+
+    }
+
+    posted_news.append(
+        record
+    )
+
+    save_history(
+        posted_news
+    )
+
+
+# =========================================================
+# 🧹 CLEAN OLD IMAGE
+# =========================================================
+
+def remove_old_image():
+
+    try:
+
+        if os.path.exists(
+            IMAGE_FILE
+        ):
+
+            os.remove(
+                IMAGE_FILE
+            )
+
+    except Exception:
+        pass
+
+
+# =========================================================
+# 🚀 MAIN
+# =========================================================
+
+def main():
+
+    print(
+        "\n============================================================"
+    )
+
+    print(
+        "🇮🇶 ASO NEWS — AUTO PUBLISHER v4"
+    )
+
+    print(
+        "============================================================"
+    )
+
+    # -----------------------------------------------------
+    # Collect
+    # -----------------------------------------------------
+
+    candidates = collect_news()
+
+    if not candidates:
+
+        print(
+            "⚠️ هیچ هەواڵێکی نوێ نەدۆزرایەوە."
+        )
+
+        return
+
+    # -----------------------------------------------------
+    # Minimum score
+    # -----------------------------------------------------
+
+    good_candidates = [
+        item
+        for item in candidates
+        if item.get(
+            "score",
+            0
+        ) >= MIN_NEWS_SCORE
+    ]
+
+    if not good_candidates:
+
+        good_candidates = candidates
+
+    # -----------------------------------------------------
+    # Gemini
+    # -----------------------------------------------------
+
+    news = generate_kurdish_news(
+        good_candidates
+    )
+
+    if not news:
+
+        print(
+            "❌ Gemini نەیتوانی هەواڵ دروست بکات."
+        )
+
+        return
+
+    # -----------------------------------------------------
+    # Print final
+    # -----------------------------------------------------
+
+    print(
+        "\n============================================================"
+    )
+
+    print(
+        "📰 FINAL POST"
+    )
+
+    print(
+        "============================================================"
+    )
+
+    final_post = build_post(
+        news
+    )
+
+    print(
+        final_post
+    )
+
+    print(
+        "\n============================================================"
+    )
+
+    print(
+        "💬 FIRST COMMENT"
+    )
+
+    print(
+        "============================================================"
+    )
+
+    first_comment = build_first_comment(
+        news
+    )
+
+    print(
+        first_comment
+    )
+
+    # -----------------------------------------------------
+    # Image
+    # -----------------------------------------------------
+
+    remove_old_image()
+
+    image_file = prepare_image(
+        news
+    )
+
+    # -----------------------------------------------------
+    # Video
+    # -----------------------------------------------------
+
+    video_url = news.get(
+        "video_url"
+    )
+
+    # -----------------------------------------------------
+    # Publish
+    # -----------------------------------------------------
+
+    post_id = None
+
+    # ئەگەر video هەبێت، هەوڵی video دەدەین.
+    # ئەگەر سەرکەوتوو نەبوو، photo دەکەین.
+    if video_url:
+
+        video_post_id = publish_video(
+            final_post,
+            video_url
+        )
+
+        if video_post_id:
+
+            post_id = video_post_id
+
+    # Photo fallback
+    if not post_id:
+
+        post_id = publish_photo(
+            final_post,
+            image_file
+        )
+
+    if not post_id:
+
+        print(
+            "\n❌ پۆست نەکرا."
+        )
+
+        return
+
+    # -----------------------------------------------------
+    # First comment
+    # -----------------------------------------------------
+
+    publish_first_comment(
+        post_id,
+        first_comment
+    )
+
+    # -----------------------------------------------------
+    # History
+    # -----------------------------------------------------
+
+    record_post(
+        news,
+        post_id
+    )
+
+    # -----------------------------------------------------
+    # Done
+    # -----------------------------------------------------
+
+    print(
+        "\n============================================================"
+    )
+
+    print(
+        "✅ پۆست بە سەرکەوتوویی بڵاوکرایەوە."
+    )
+
+    print(
+        f"🆔 POST ID: {post_id}"
+    )
+
+    print(
+        f"📰 SOURCE: {news.get('source', '')}"
+    )
+
+    print(
+        "============================================================"
+    )
+
+
+# =========================================================
+# ▶️ RUN
+# =========================================================
+
+if __name__ == "__main__":
+
+    try:
+
+        main()
+
+    except Exception as e:
+
+        print(
+            "\n============================================================"
+        )
+
+        print(
+            "❌ FATAL ERROR"
+        )
+
+        print(
+            str(e)
+        )
+
+        print(
+            "============================================================"
+        )
+
+        raise
