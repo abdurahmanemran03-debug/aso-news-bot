@@ -13,7 +13,7 @@ from google import genai
 
 
 # =========================================================
-# ASO NEWS — AUTO PUBLISHER
+# ASO NEWS — AUTO PUBLISHER v2
 # =========================================================
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
@@ -23,18 +23,68 @@ PAGE_ID = "1128027710403407"
 
 HISTORY_FILE = "posted_news.json"
 
-# بەو مۆدێلەی ئێستا لە پڕۆژەکەت بەکاری دەهێنیت بیهێڵەوە
+# Gemini
 GEMINI_MODEL = "gemini-3.5-flash"
 
-MAX_HISTORY = 1000
-MAX_CANDIDATES = 10
+MAX_HISTORY = 2000
+
+# لە نێوان ئەو هەموو هەواڵانەدا
+# ئەمانە دەچن بۆ Gemini
+MAX_CANDIDATES = 20
+
+# ---------------------------------------------------------
+# Facebook
+# ---------------------------------------------------------
 
 FACEBOOK_PHOTO_URL = (
     f"https://graph.facebook.com/{PAGE_ID}/photos"
 )
 
-# لۆگۆی بێ پشتەوە
+# ---------------------------------------------------------
+# Logo
+# ---------------------------------------------------------
+
 LOGO_FILE = "logo.png"
+
+
+# =========================================================
+# NEWS PRIORITY
+# =========================================================
+
+IRAQ_KURDISTAN_KEYWORDS = [
+    # Kurdistan
+    "kurdistan",
+    "kurdish",
+    "erbil",
+    "hawler",
+    "sulaymaniyah",
+    "sulaimani",
+    "duhok",
+    "dohuk",
+    "halabja",
+    "kirkuk",
+    "zakho",
+    "akre",
+    "kalar",
+    "rawanduz",
+
+    # Iraq
+    "iraq",
+    "iraqi",
+    "baghdad",
+    "basra",
+    "mosul",
+    "najaf",
+    "karbala",
+    "anbar",
+    "ninawa",
+    "diyala",
+    "salahaddin",
+
+    # KRG
+    "krg",
+    "kurdistan regional government",
+]
 
 
 # =========================================================
@@ -42,26 +92,172 @@ LOGO_FILE = "logo.png"
 # =========================================================
 
 RSS_SOURCES = [
-    {
-        "name": "BBC News",
-        "url": "https://feeds.bbci.co.uk/news/rss.xml"
-    },
+
+    # =====================================================
+    # 🇮🇶 KURDISTAN / IRAQ — HIGH PRIORITY
+    # =====================================================
+
     {
         "name": "Rudaw",
+        "priority": 10,
         "url": (
             "https://news.google.com/rss/search?"
             "q=site%3Arudaw.net+when%3A1d"
             "&hl=en-US&gl=US&ceid=US%3Aen"
         )
     },
+
     {
         "name": "Kurdistan24",
+        "priority": 10,
         "url": (
             "https://news.google.com/rss/search?"
             "q=site%3Akurdistan24.net+when%3A1d"
             "&hl=en-US&gl=US&ceid=US%3Aen"
         )
-    }
+    },
+
+    {
+        "name": "NRT",
+        "priority": 9,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Anrt.tv+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "BasNews",
+        "priority": 9,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Abasnews.com+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "Shafaq News",
+        "priority": 9,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Ashafaq.com+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "Iraqi News",
+        "priority": 8,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=Iraq+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    # =====================================================
+    # 🌍 WORLD / REGION
+    # =====================================================
+
+    {
+        "name": "Al Jazeera",
+        "priority": 7,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Aaljazeera.com+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "Reuters",
+        "priority": 7,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Areuters.com+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "Associated Press",
+        "priority": 7,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Aapnews.com+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "BBC News",
+        "priority": 6,
+        "url": (
+            "https://feeds.bbci.co.uk/news/rss.xml"
+        )
+    },
+
+    {
+        "name": "DW",
+        "priority": 6,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Adw.com+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "France 24",
+        "priority": 6,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Afrance24.com+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "VOA",
+        "priority": 5,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Avoanews.com+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "Anadolu Agency",
+        "priority": 6,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Aaa.com.tr+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "The Guardian",
+        "priority": 5,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Atheguardian.com+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
+
+    {
+        "name": "NPR",
+        "priority": 5,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Anpr.org+when%3A1d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        )
+    },
 ]
 
 
@@ -73,7 +269,8 @@ session = requests.Session()
 
 session.headers.update({
     "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) "
+        "Mozilla/5.0 "
+        "(X11; Linux x86_64) "
         "AppleWebKit/537.36 "
         "(KHTML, like Gecko) "
         "Chrome/124.0 Safari/537.36"
@@ -100,14 +297,23 @@ def load_history():
         return []
 
     try:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+
+        with open(
+            HISTORY_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
             data = json.load(f)
 
         if isinstance(data, list):
             return data
 
     except Exception as e:
-        print(f"⚠️ کێشە لە خوێندنەوەی history: {e}")
+
+        print(
+            f"⚠️ کێشە لە history: {e}"
+        )
 
     return []
 
@@ -116,7 +322,12 @@ def save_history(history):
 
     history = history[-MAX_HISTORY:]
 
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+    with open(
+        HISTORY_FILE,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
         json.dump(
             history,
             f,
@@ -129,7 +340,7 @@ posted_news = load_history()
 
 
 # =========================================================
-# TEXT CLEANING
+# TEXT
 # =========================================================
 
 def clean_text(text):
@@ -139,9 +350,17 @@ def clean_text(text):
 
     text = html.unescape(text)
 
-    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(
+        r"<[^>]+>",
+        " ",
+        text
+    )
 
-    text = re.sub(r"\s+", " ", text)
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
 
     return text.strip()
 
@@ -165,40 +384,106 @@ def create_news_id(title, link):
     )
 
     return hashlib.sha256(
-        f"{base}|{normalized_title}".encode("utf-8")
+        f"{base}|{normalized_title}".encode(
+            "utf-8"
+        )
     ).hexdigest()
 
 
 # =========================================================
-# IMAGE URL EXTRACTION
+# PRIORITY SCORE
+# =========================================================
+
+def calculate_priority(item):
+
+    text = (
+        item["title"]
+        + " "
+        + item["summary"]
+    ).lower()
+
+    score = item["priority"] * 10
+
+    # Kurdistan / Iraq boost
+    for keyword in IRAQ_KURDISTAN_KEYWORDS:
+
+        if keyword in text:
+            score += 35
+
+    # Recent-looking important terms
+    important_words = [
+        "breaking",
+        "urgent",
+        "latest",
+        "attack",
+        "earthquake",
+        "government",
+        "president",
+        "prime minister",
+        "election",
+        "oil",
+        "security",
+        "war",
+        "iran",
+        "turkey",
+        "syria",
+        "iraq",
+        "kurdistan",
+    ]
+
+    for word in important_words:
+
+        if word in text:
+            score += 3
+
+    return score
+
+
+# =========================================================
+# RSS IMAGE
 # =========================================================
 
 def get_rss_image(entry):
 
-    media_content = entry.get("media_content")
+    media_content = entry.get(
+        "media_content"
+    )
 
     if media_content:
+
         for media in media_content:
+
             url = media.get("url")
+
             if url:
                 return url
 
-    media_thumbnail = entry.get("media_thumbnail")
+    media_thumbnail = entry.get(
+        "media_thumbnail"
+    )
 
     if media_thumbnail:
+
         for media in media_thumbnail:
+
             url = media.get("url")
+
             if url:
                 return url
 
-    enclosures = entry.get("enclosures")
+    enclosures = entry.get(
+        "enclosures"
+    )
 
     if enclosures:
+
         for enclosure in enclosures:
+
             url = (
                 enclosure.get("href")
                 or enclosure.get("url")
             )
+
             if url:
                 return url
 
@@ -221,7 +506,7 @@ def get_rss_image(entry):
 
 
 # =========================================================
-# ARTICLE PAGE IMAGE
+# ARTICLE IMAGES
 # =========================================================
 
 def get_article_images(article_url):
@@ -245,11 +530,17 @@ def get_article_images(article_url):
         images = []
 
         patterns = [
+
             r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
+
             r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+
             r'<meta[^>]+property=["\']og:image:url["\'][^>]+content=["\']([^"\']+)',
+
             r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image:url["\']',
+
             r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)',
+
             r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
         ]
 
@@ -263,7 +554,9 @@ def get_article_images(article_url):
 
             for match in matches:
 
-                image_url = html.unescape(match.strip())
+                image_url = html.unescape(
+                    match.strip()
+                )
 
                 image_url = urljoin(
                     response.url,
@@ -274,7 +567,9 @@ def get_article_images(article_url):
                     image_url.startswith("http")
                     and image_url not in images
                 ):
-                    images.append(image_url)
+                    images.append(
+                        image_url
+                    )
 
         html_images = re.findall(
             r'<img[^>]+(?:src|data-src)=["\']([^"\']+)',
@@ -297,21 +592,24 @@ def get_article_images(article_url):
                 image_url.startswith("http")
                 and image_url not in images
             ):
-                images.append(image_url)
 
-        return images[:20]
+                images.append(
+                    image_url
+                )
+
+        return images[:30]
 
     except Exception as e:
 
         print(
-            f"⚠️ کێشە لە پشکنینی پەڕەی هەواڵ: {e}"
+            f"⚠️ کێشە لە پشکنینی وێنە: {e}"
         )
 
         return []
 
 
 # =========================================================
-# DOWNLOAD + QUALITY CHECK
+# DOWNLOAD BEST IMAGE
 # =========================================================
 
 def download_best_image(
@@ -328,7 +626,9 @@ def download_best_image(
 
         try:
 
-            print(f"🔎 پشکنینی وێنە: {image_url}")
+            print(
+                f"🔎 پشکنینی وێنە: {image_url}"
+            )
 
             response = session.get(
                 image_url,
@@ -348,8 +648,10 @@ def download_best_image(
 
             image_data = response.content
 
-            if len(image_data) < 30_000:
-                print("⛔ وێنەکە زۆر بچووکە.")
+            if len(image_data) < 25_000:
+                print(
+                    "⛔ وێنەکە زۆر بچووکە."
+                )
                 continue
 
             image = Image.open(
@@ -358,23 +660,32 @@ def download_best_image(
 
             width, height = image.size
 
-            print(f"📐 قەبارە: {width}x{height}")
+            print(
+                f"📐 قەبارە: {width}x{height}"
+            )
 
             if width < 800 or height < 450:
                 print(
-                    "⛔ قەبارەی وێنەکە بۆ پۆستی هەواڵ کەمە."
+                    "⛔ قەبارەی وێنەکە کەمە."
                 )
                 continue
 
-            score = (
-                width * height
-                + len(image_data) / 100
-            )
+            # Prefer landscape news images
+            aspect = width / height
 
-            if best is None or score > best["score"]:
+            if aspect < 1.15:
+                score = width * height * 0.5
+            else:
+                score = width * height
+
+            score += len(image_data) / 100
+
+            if (
+                best is None
+                or score > best["score"]
+            ):
 
                 best = {
-                    "url": image_url,
                     "data": image_data,
                     "width": width,
                     "height": height,
@@ -390,7 +701,7 @@ def download_best_image(
     if best is None:
 
         print(
-            "❌ هیچ وێنەیەکی کوالێتی باش نەدۆزرایەوە."
+            "❌ هیچ وێنەیەکی گونجاو نەدۆزرایەوە."
         )
 
         return None
@@ -411,23 +722,27 @@ def download_best_image(
             optimize=True
         )
 
-        print("\n✅ باشترین وێنە هەڵبژێردرا:")
-        print(f"📐 {best['width']}x{best['height']}")
-        print(f"💾 {len(best['data']) / 1024:.1f} KB")
+        print(
+            "\n✅ باشترین وێنە:"
+        )
+
+        print(
+            f"📐 {best['width']}x{best['height']}"
+        )
 
         return filename
 
     except Exception as e:
 
         print(
-            f"❌ هەڵە لە پاشەکەوتکردنی وێنە: {e}"
+            f"❌ هەڵە لە هەڵگرتنی وێنە: {e}"
         )
 
         return None
 
 
 # =========================================================
-# WATERMARK — ASO NEWS LOGO
+# WATERMARK
 # =========================================================
 
 def add_logo_watermark(
@@ -453,17 +768,18 @@ def add_logo_watermark(
             logo_path
         ).convert("RGBA")
 
-        # Remove empty transparent area around logo
+        # Remove transparent empty area
         alpha = logo.getchannel("A")
+
         bbox = alpha.getbbox()
 
         if bbox:
             logo = logo.crop(bbox)
 
-        # Logo = about 10% of image width
+        # Small and clean logo
         target_width = max(
-            90,
-            int(base.width * 0.10)
+            75,
+            int(base.width * 0.075)
         )
 
         ratio = (
@@ -476,25 +792,42 @@ def add_logo_watermark(
         )
 
         logo = logo.resize(
-            (target_width, target_height),
+            (
+                target_width,
+                target_height
+            ),
             Image.Resampling.LANCZOS
         )
 
-        # Slightly transparent watermark
+        # Clearer logo
         alpha = logo.getchannel("A")
+
         alpha = alpha.point(
-            lambda p: int(p * 0.82)
+            lambda p: min(
+                255,
+                int(p * 0.96)
+            )
         )
+
         logo.putalpha(alpha)
 
-        # Bottom-right with safe margin
+        # Margin
         margin = max(
-            18,
+            16,
             int(base.width * 0.018)
         )
 
-        x = base.width - logo.width - margin
-        y = base.height - logo.height - margin
+        x = (
+            base.width
+            - logo.width
+            - margin
+        )
+
+        y = (
+            base.height
+            - logo.height
+            - margin
+        )
 
         layer = Image.new(
             "RGBA",
@@ -520,7 +853,7 @@ def add_logo_watermark(
         )
 
         print(
-            "✅ لۆگۆ بە شێوەی watermark ـی پاک زیاد کرا."
+            "✅ لۆگۆ بە شێوەی پاک و ڕوون زیاد کرا."
         )
 
         return image_path
@@ -528,24 +861,28 @@ def add_logo_watermark(
     except Exception as e:
 
         print(
-            f"⚠️ کێشە لە زیادکردنی لۆگۆ: {e}"
+            f"⚠️ کێشە لە watermark: {e}"
         )
 
         return image_path
 
 
 # =========================================================
-# FIND BEST IMAGE
+# FIND IMAGE
 # =========================================================
 
 def find_best_image(entry):
 
     candidates = []
 
-    rss_image = get_rss_image(entry)
+    rss_image = get_rss_image(
+        entry
+    )
 
     if rss_image:
-        candidates.append(rss_image)
+        candidates.append(
+            rss_image
+        )
 
     article_url = entry.get(
         "link",
@@ -554,21 +891,24 @@ def find_best_image(entry):
 
     if article_url:
 
-        article_images = get_article_images(
-            article_url
+        candidates.extend(
+            get_article_images(
+                article_url
+            )
         )
 
-        candidates.extend(article_images)
-
-    unique_candidates = []
+    unique = []
 
     for url in candidates:
 
-        if url and url not in unique_candidates:
-            unique_candidates.append(url)
+        if (
+            url
+            and url not in unique
+        ):
+            unique.append(url)
 
     image_path = download_best_image(
-        unique_candidates
+        unique
     )
 
     if not image_path:
@@ -587,13 +927,21 @@ def collect_news():
 
     all_news = []
 
+    seen_ids = set()
+
     for source in RSS_SOURCES:
 
-        print("\n" + "=" * 60)
+        print(
+            "\n" + "=" * 60
+        )
+
         print(
             f"🔎 سەرچاوە: {source['name']}"
         )
-        print("=" * 60)
+
+        print(
+            "=" * 60
+        )
 
         try:
 
@@ -602,17 +950,23 @@ def collect_news():
             )
 
             print(
-                f"📰 {len(feed.entries)} هەواڵ دۆزرایەوە"
+                f"📰 {len(feed.entries)} هەواڵ"
             )
 
             for item in feed.entries:
 
                 title = clean_text(
-                    item.get("title", "")
+                    item.get(
+                        "title",
+                        ""
+                    )
                 )
 
                 summary = clean_text(
-                    item.get("summary", "")
+                    item.get(
+                        "summary",
+                        ""
+                    )
                 )
 
                 link = item.get(
@@ -631,14 +985,39 @@ def collect_news():
                 if news_id in posted_news:
                     continue
 
-                all_news.append({
+                if news_id in seen_ids:
+                    continue
+
+                seen_ids.add(news_id)
+
+                news_item = {
+
                     "id": news_id,
+
                     "source": source["name"],
+
+                    "priority": source[
+                        "priority"
+                    ],
+
                     "title": title,
+
                     "summary": summary,
+
                     "link": link,
+
                     "entry": item
-                })
+                }
+
+                news_item[
+                    "score"
+                ] = calculate_priority(
+                    news_item
+                )
+
+                all_news.append(
+                    news_item
+                )
 
         except Exception as e:
 
@@ -646,14 +1025,22 @@ def collect_news():
                 f"⚠️ کێشە لە {source['name']}: {e}"
             )
 
+    # Highest priority first
+    all_news.sort(
+        key=lambda x: x["score"],
+        reverse=True
+    )
+
     return all_news
 
 
 # =========================================================
-# GEMINI NEWS WRITER
+# GEMINI
 # =========================================================
 
-def generate_news_post(candidates):
+def generate_news_post(
+    candidates
+):
 
     news_text = ""
 
@@ -665,6 +1052,7 @@ def generate_news_post(candidates):
         news_text += f"""
 [{i}]
 سەرچاوە: {item['source']}
+نمرەی گرنگی: {item['score']}
 سەردێڕ: {item['title']}
 پوختە: {item['summary']}
 لینک: {item['link']}
@@ -673,26 +1061,41 @@ def generate_news_post(candidates):
     prompt = f"""
 تۆ دەستکارێکی هەواڵی پیشەیی بۆ ASO NEWS ـیت.
 
-لە نێوان هەواڵەکانی خوارەوە تەنها یەک هەواڵ
-هەڵبژێرە و بە کوردی سۆرانیی ڕەوان و
-بێ هەڵەی تایپی بیگۆڕە بۆ پۆستی Facebook.
+لە نێوان ئەو هەواڵانەی خوارەوە تەنها یەک هەواڵ
+هەڵبژێرە بۆ پۆستی Facebook.
 
-یاساکان:
+ئەولەویەتی:
 
+1. هەواڵی هەرێمی کوردستان.
+2. هەواڵی عێراق.
+3. هەواڵی ناوچەکە.
+4. هەواڵی جیهانی زۆر گرنگ.
+
+بەڵام:
+- هەموو جارێک BBC هەڵمەبژێرە.
+- سەرچاوەی جیاواز بەکاربهێنە.
+- ئەگەر هەواڵێکی Rudaw، Kurdistan24، NRT،
+  BasNews یان Shafaq گرنگتر بوو، ئەویان هەڵبژێرە.
+- هەمان ڕووداو دووبارە مەکە.
+
+یاساکانی نووسین:
+
+- تەنها زانیارییەکانی سەرچاوە بەکاربهێنە.
 - هیچ زانیارییەکی خۆت زیاد مەکە.
-- هیچ شتێک مەخەمنە.
-- ژمارە و بەروارەکان مەگۆڕە.
 - ناوی کەس و شوێن مەگۆڕە.
+- ژمارە و بەروار مەگۆڕە.
 - شیکاری سیاسی مەکە.
-- هەواڵەکە بە کوردی سۆرانیی سروشتی بنووسە.
-- سەردێڕ کورت و ڕوون بێت.
-- BODY کورت بێت، تەنها سەرەکیترین زانیارییەکان.
-- FULL_BODY درێژتر بێت و هەموو زانیارییە
-  پشتڕاستکراوەکانی پوختەکە بگرێتەوە.
-- FULL_BODY دەبێت 2 تا 4 پاراگراف بێت.
-- هیچ زانیارییەکی زیادکراو لە FULL_BODY مەهێنە.
-- ئەگەر هەمان ڕووداو لە چەند سەرچاوەیەکدا هەبوو،
-  تەنها یەکێکیان هەڵبژێرە.
+- کوردی سۆرانیی سروشتی و ڕوون بەکاربهێنە.
+- سەردێڕ کورت و سەرنجڕاکێش بێت.
+- BODY کورت بێت.
+- FULL_BODY دوو تا چوار پاراگراف بێت.
+- FULL_BODY هەموو زانیاریی پشتڕاستکراوی هەواڵەکە بگرێتەوە.
+- هیچ شتێکی خەیاڵی زیاد مەکە.
+
+HASHTAGS:
+هاشتاکی پەیوەندیدار بە هەواڵەکە دروست بکە.
+هەمیشە #ASONEWS دابنێ.
+لە 4 تا 7 هاشتاک زیاتر مەکە.
 
 فۆرماتی وەڵام:
 
@@ -701,13 +1104,13 @@ SOURCE_NUMBER: ژمارە
 TITLE: سەردێڕ
 
 BODY:
-دەقی کورت بۆ پۆستی سەرەکی
+دەقی کورت
 
 FULL_BODY:
-دەقی درێژتر بۆ کۆمێنتی یەکەم
+دەقی درێژتر
 
 HASHTAGS:
-#ASONEWS #کوردستان #هەواڵ
+#ASONEWS ...
 
 SOURCE:
 ناوی سەرچاوە
@@ -741,7 +1144,9 @@ SOURCE:
 # PARSE GEMINI
 # =========================================================
 
-def parse_gemini_result(result):
+def parse_gemini_result(
+    result
+):
 
     if not result:
         return None
@@ -776,7 +1181,7 @@ def parse_gemini_result(result):
         re.IGNORECASE | re.DOTALL
     )
 
-    source_match_name = re.search(
+    source_name_match = re.search(
         r"SOURCE:\s*(.+)",
         result,
         re.IGNORECASE
@@ -820,8 +1225,8 @@ def parse_gemini_result(result):
     )
 
     source_name = (
-        source_match_name.group(1).strip()
-        if source_match_name
+        source_name_match.group(1).strip()
+        if source_name_match
         else ""
     )
 
@@ -829,12 +1234,24 @@ def parse_gemini_result(result):
         return None
 
     return {
-        "source_number": source_number,
-        "title": title,
-        "body": body,
-        "full_body": full_body,
-        "hashtags": hashtags,
-        "source_name": source_name
+
+        "source_number":
+            source_number,
+
+        "title":
+            title,
+
+        "body":
+            body,
+
+        "full_body":
+            full_body,
+
+        "hashtags":
+            hashtags,
+
+        "source_name":
+            source_name
     }
 
 
@@ -855,17 +1272,20 @@ def build_post(parsed):
 def build_first_comment(parsed):
 
     return (
-        f"📌 درێژەی هەواڵ:\n\n"
+        "📌 درێژەی هەواڵ:\n\n"
         f"{parsed['full_body']}\n\n"
         f"سەرچاوە: {parsed['source_name']}"
     )
 
 
 # =========================================================
-# FACEBOOK
+# FACEBOOK POST
 # =========================================================
 
-def publish_photo(image_path, message):
+def publish_photo(
+    image_path,
+    message
+):
 
     try:
 
@@ -875,7 +1295,9 @@ def publish_photo(image_path, message):
         ) as image_file:
 
             response = requests.post(
+
                 FACEBOOK_PHOTO_URL,
+
                 files={
                     "source": (
                         "ASO_NEWS.jpg",
@@ -883,17 +1305,29 @@ def publish_photo(image_path, message):
                         "image/jpeg"
                     )
                 },
+
                 data={
-                    "message": message,
+                    "message":
+                        message,
+
                     "access_token":
                         FACEBOOK_PAGE_ACCESS_TOKEN
                 },
+
                 timeout=60
             )
 
-        print("\n" + "=" * 60)
-        print("📘 FACEBOOK PHOTO POST")
-        print("=" * 60)
+        print(
+            "\n" + "=" * 60
+        )
+
+        print(
+            "📘 FACEBOOK PHOTO POST"
+        )
+
+        print(
+            "=" * 60
+        )
 
         print(
             "Status:",
@@ -915,7 +1349,14 @@ def publish_photo(image_path, message):
         return None
 
 
-def publish_first_comment(post_id, comment):
+# =========================================================
+# FIRST COMMENT
+# =========================================================
+
+def publish_first_comment(
+    post_id,
+    comment
+):
 
     try:
 
@@ -925,18 +1366,31 @@ def publish_first_comment(post_id, comment):
         )
 
         response = requests.post(
+
             url,
+
             data={
-                "message": comment,
+                "message":
+                    comment,
+
                 "access_token":
                     FACEBOOK_PAGE_ACCESS_TOKEN
             },
+
             timeout=60
         )
 
-        print("\n" + "=" * 60)
-        print("💬 FACEBOOK FIRST COMMENT")
-        print("=" * 60)
+        print(
+            "\n" + "=" * 60
+        )
+
+        print(
+            "💬 FACEBOOK FIRST COMMENT"
+        )
+
+        print(
+            "=" * 60
+        )
 
         print(
             "Status:",
@@ -964,25 +1418,51 @@ def publish_first_comment(post_id, comment):
 
 def main():
 
-    print("\n" + "=" * 60)
-    print("🇹🇯 ASO NEWS — AUTO PUBLISHER")
-    print("=" * 60)
+    print(
+        "\n" + "=" * 60
+    )
+
+    print(
+        "🇮🇶 ASO NEWS — AUTO PUBLISHER v2"
+    )
+
+    print(
+        "=" * 60
+    )
 
     all_news = collect_news()
 
     if not all_news:
 
         print(
-            "ℹ️ هیچ هەواڵێکی نوێ نییە."
+            "\nℹ️ هیچ هەواڵێکی نوێ نییە."
         )
 
         return
 
     print(
-        f"✅ {len(all_news)} هەواڵی نوێ دۆزرایەوە."
+        f"\n✅ {len(all_news)} هەواڵی نوێ دۆزرایەوە."
     )
 
-    candidates = all_news[:MAX_CANDIDATES]
+    # Only top candidates
+    candidates = all_news[
+        :MAX_CANDIDATES
+    ]
+
+    print(
+        "\n🎯 هەواڵە بەرزترینەکان:"
+    )
+
+    for i, item in enumerate(
+        candidates,
+        start=1
+    ):
+
+        print(
+            f"{i}. "
+            f"[{item['source']}] "
+            f"{item['title']}"
+        )
 
     result = generate_news_post(
         candidates
@@ -991,10 +1471,21 @@ def main():
     if not result:
         return
 
-    print("\n" + "=" * 60)
-    print("🤖 GEMINI")
-    print("=" * 60)
-    print(result)
+    print(
+        "\n" + "=" * 60
+    )
+
+    print(
+        "🤖 GEMINI"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    print(
+        result
+    )
 
     parsed = parse_gemini_result(
         result
@@ -1008,7 +1499,9 @@ def main():
 
         return
 
-    selected_index = parsed["source_number"]
+    selected_index = (
+        parsed["source_number"]
+    )
 
     if (
         selected_index < 1
@@ -1033,19 +1526,38 @@ def main():
         parsed
     )
 
-    print("\n" + "=" * 60)
-    print("📰 ASO NEWS — FINAL POST")
-    print("=" * 60)
-    print(post)
+    print(
+        "\n" + "=" * 60
+    )
 
-    print("\n" + "=" * 60)
-    print("💬 FIRST COMMENT")
-    print("=" * 60)
-    print(first_comment)
+    print(
+        "📰 FINAL POST"
+    )
 
-    print("\n" + "=" * 60)
-    print("📸 بەدوای باشترین وێنەدا دەگەڕێین...")
-    print("=" * 60)
+    print(
+        "=" * 60
+    )
+
+    print(
+        post
+    )
+
+    print(
+        "\n📌 سەرچاوەی ڕاستەقینە:"
+        f" {selected_news['source']}"
+    )
+
+    print(
+        "\n" + "=" * 60
+    )
+
+    print(
+        "📸 بەدوای وێنەی باشدا دەگەڕێین..."
+    )
+
+    print(
+        "=" * 60
+    )
 
     image_path = find_best_image(
         selected_news["entry"]
@@ -1054,7 +1566,7 @@ def main():
     if not image_path:
 
         print(
-            "⛔ هیچ وێنەیەکی کوالێتی باش نەدۆزرایەوە."
+            "⛔ وێنەی گونجاو نەدۆزرایەوە."
         )
 
         return
@@ -1079,37 +1591,49 @@ def main():
 
             facebook_data = {}
 
-        # /photos زۆرجار post_id دەگەڕێنێتەوە
         post_id = (
-            facebook_data.get("post_id")
-            or facebook_data.get("id")
+            facebook_data.get(
+                "post_id"
+            )
+            or
+            facebook_data.get(
+                "id"
+            )
         )
 
         if post_id:
 
-            comment_response = publish_first_comment(
-                post_id,
-                first_comment
+            comment_response = (
+                publish_first_comment(
+                    post_id,
+                    first_comment
+                )
             )
 
             if (
                 comment_response
-                and comment_response.status_code == 200
+                and
+                comment_response.status_code == 200
             ):
+
                 print(
-                    "\n✅ کۆمێنتی یەکەمیش بە سەرکەوتوویی زیاد کرا."
+                    "\n✅ کۆمێنتی یەکەم زیاد کرا."
                 )
+
             else:
+
                 print(
-                    "\n⚠️ پۆست کرا، بەڵام کۆمێنتی یەکەم نەکرا."
+                    "\n⚠️ پۆست کرا، "
+                    "بەڵام کۆمێنت نەکرا."
                 )
 
         else:
 
             print(
-                "\n⚠️ پۆست کرا، بەڵام Facebook post_id نەگەڕاندەوە."
+                "\n⚠️ post_id نەگەڕێندرایەوە."
             )
 
+        # Save ONLY after successful Facebook post
         posted_news.append(
             selected_news["id"]
         )
@@ -1128,10 +1652,16 @@ def main():
             "\n❌ Facebook پۆستەکەی قبوڵ نەکرد."
         )
 
+    # Cleanup
     try:
 
-        if os.path.exists("news_image.jpg"):
-            os.remove("news_image.jpg")
+        if os.path.exists(
+            "news_image.jpg"
+        ):
+
+            os.remove(
+                "news_image.jpg"
+            )
 
     except Exception:
         pass
