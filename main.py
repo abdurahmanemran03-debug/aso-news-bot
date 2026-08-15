@@ -1,6 +1,7 @@
 import os
 import json
 import hashlib
+import base64
 import re
 import html
 import time
@@ -15,21 +16,21 @@ from google import genai
 
 
 # ============================================================
-# 🇮🇶 ASO NEWS — AUTO PUBLISHER v5
+# 🇮🇶 ASO NEWS — AUTO PUBLISHER v7
 # ============================================================
 # Main improvements:
 # 1) Kurdistan/Iraq sources have higher priority.
 # 2) More sources are searched through Google News RSS.
 # 3) Real article images are preferred.
 # 4) A professional ASO NEWS graphic is placed over the real image.
-# 5) Fallback graphic is used only when no real image is available.
-# 6) First comment is attempted after publishing and errors are shown clearly.
+# 5) If no real image is available, Gemini creates an event-specific editorial illustration.
+# 6) First comment is attempted after publishing; permission errors are diagnosed clearly.
 # 7) History prevents duplicate posts.
 # 8) One post per workflow run.
 # ============================================================
 
 print("=" * 64)
-print("🇮🇶 ASO NEWS — AUTO PUBLISHER v5")
+print("🇮🇶 ASO NEWS — AUTO PUBLISHER v7")
 print("=" * 64)
 
 
@@ -83,9 +84,16 @@ FACEBOOK_VIDEO_URL = (
 # 🤖 GEMINI
 # ============================================================
 
-GEMINI_MODEL = os.environ.get(
-    "GEMINI_MODEL",
-    "gemini-3.1-flash-lite"
+GEMINI_TEXT_MODEL = os.environ.get(
+    "GEMINI_TEXT_MODEL",
+    os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+)
+
+# Gemini 3.5 Flash is for text. Professional image generation uses
+# Gemini 3 Pro Image (Nano Banana Pro).
+GEMINI_IMAGE_MODEL = os.environ.get(
+    "GEMINI_IMAGE_MODEL",
+    "gemini-3-pro-image"
 )
 
 client = genai.Client(api_key=GEMINI_API_KEY)
@@ -595,7 +603,7 @@ SOURCE:
         print("🤖 GEMINI")
 
         response = client.models.generate_content(
-            model=GEMINI_MODEL,
+            model=GEMINI_TEXT_MODEL,
             contents=prompt
         )
 
@@ -1143,19 +1151,100 @@ def add_watermark(image_file):
 
 
 # ============================================================
-# 🖼️ FALLBACK
+# 🖼️ IMAGE FALLBACK — REAL PHOTO → GEMINI ILLUSTRATION → ASO GRAPHIC
 # ============================================================
 
+def create_ai_news_image(news, filename=IMAGE_FILE):
+    """Create a clean professional editorial image with Gemini Image.
+
+    Gemini is instructed to produce NO branding/text. The official ASO NEWS
+    logo is added exactly once by add_watermark() after generation.
+    """
+    try:
+        title = clean_text(news.get("kur_title", news.get("title", "NEWS")))
+        body = clean_text(news.get("body", news.get("summary", "")))
+        source = clean_text(news.get("source", ""))
+
+        prompt = f"""
+Create a premium professional editorial news image for a Kurdish news page.
+
+HEADLINE:
+{title}
+
+SUMMARY:
+{body}
+
+SOURCE:
+{source}
+
+Requirements:
+- 16:9 horizontal landscape composition for a Facebook news post.
+- Photorealistic, premium editorial-news photography style.
+- Visually represent the actual event described by the headline and summary.
+- Realistic lighting, strong composition, natural colors, high detail.
+- Do not invent identifiable real people.
+- Do NOT add any text, letters, headline, caption, logo, watermark, brand mark,
+  channel logo, badge, UI, screenshot, or social-media element.
+- Do NOT create an ASO NEWS logo. The ASO NEWS logo will be added separately
+  by the program exactly once after generation.
+- Leave a little clean space in the lower-right area for the external logo.
+- Do not make the image look like a poster or template; make it look like a
+  high-quality editorial news visual.
+""".strip()
+
+        print("🤖 Gemini professional image generation starts...")
+        print(f"🎨 IMAGE MODEL: {GEMINI_IMAGE_MODEL}")
+
+        interaction = client.interactions.create(
+            model=GEMINI_IMAGE_MODEL,
+            input=prompt,
+            response_format={
+                "type": "image",
+                "mime_type": "image/jpeg",
+                "aspect_ratio": "16:9",
+                "image_size": "2K",
+            },
+        )
+
+        image_data = getattr(
+            getattr(interaction, "output_image", None),
+            "data",
+            None,
+        )
+
+        if not image_data:
+            print("⚠️ Gemini image هیچ داتای وێنەیەکی نەگەڕاندەوە.")
+            return None
+
+        if isinstance(image_data, str):
+            image_data = base64.b64decode(image_data)
+
+        with open(filename, "wb") as f:
+            f.write(image_data)
+
+        with Image.open(filename) as generated:
+            generated.verify()
+
+        # Normalize the generated image to the Facebook size used by the page.
+        with Image.open(filename).convert("RGB") as generated:
+            generated = fit_cover(generated, (1200, 675))
+            generated.save(filename, "JPEG", quality=95, optimize=True)
+
+        print("✅ Gemini وێنەی پڕۆفیشنالی دروست کرد.")
+        return filename
+
+    except Exception as e:
+        print(f"⚠️ Gemini image generation failed: {e}")
+        return None
+
 def create_fallback_image(title, filename=IMAGE_FILE):
-    """Create a clean professional fallback when a genuine article photo is unavailable."""
+    """Create a clean professional ASO NEWS graphic as the last fallback."""
     try:
         width, height = 1200, 675
         image = Image.new("RGB", (width, height), (11, 12, 17))
         draw = ImageDraw.Draw(image)
 
-        # Subtle news-style background.
         for r in range(80, 650, 55):
-            alpha = max(0, 55 - r // 15)
             draw.ellipse(
                 [width - r, -r // 2, width + r, r // 2],
                 outline=(55, 58, 70),
@@ -1169,34 +1258,49 @@ def create_fallback_image(title, filename=IMAGE_FILE):
         sub = find_font(24, bold=False)
         title_font = find_font(42, bold=True)
 
-        draw.text((55, 48), "ASO NEWS", font=brand, fill=(255, 255, 255))
-        draw.text((58, 105), "KURDISTAN  •  IRAQ  •  WORLD", font=sub, fill=(220, 30, 45))
-
-        # News badge.
-        draw.rounded_rectangle(
-            [55, 165, 250, 215], radius=18,
-            fill=(220, 30, 45), outline=(255, 255, 255), width=1
+        draw.text((55, 48), "NEWS", font=brand, fill=(255, 255, 255))
+        draw.text(
+            (58, 105),
+            "KURDISTAN  •  IRAQ  •  WORLD",
+            font=sub,
+            fill=(220, 30, 45)
         )
-        draw.text((80, 174), "NEWS", font=find_font(24, bold=True), fill=(255, 255, 255))
 
-        # Main title panel.
+        draw.rounded_rectangle(
+            [55, 165, 250, 215],
+            radius=18,
+            fill=(220, 30, 45),
+            outline=(255, 255, 255),
+            width=1
+        )
+        draw.text(
+            (80, 174),
+            "NEWS",
+            font=find_font(24, bold=True),
+            fill=(255, 255, 255)
+        )
+
         panel = [55, 245, width - 55, height - 65]
         draw.rounded_rectangle(
-            panel, radius=28,
-            fill=(24, 25, 32), outline=(220, 30, 45), width=3
+            panel,
+            radius=28,
+            fill=(24, 25, 32),
+            outline=(220, 30, 45),
+            width=3
         )
 
         clean_title = clean_text(title)
-        # Smaller font and maximum 3 lines prevents the ugly clipped text seen before.
         lines = wrap_text(draw, clean_title, title_font, width - 180)[:3]
         if not lines:
-            lines = ["ASO NEWS"]
+            lines = ["NEWS"]
 
         total_h = len(lines) * 58
         y = panel[1] + ((panel[3] - panel[1] - total_h) // 2)
+
         for line in lines:
             draw.text(
-                (width - 95, y), line,
+                (width - 95, y),
+                line,
                 font=title_font,
                 fill=(255, 255, 255),
                 anchor="ra",
@@ -1205,39 +1309,26 @@ def create_fallback_image(title, filename=IMAGE_FILE):
             )
             y += 58
 
-        # Use the real logo if available.
-        if os.path.exists(LOGO_FILE):
-            try:
-                logo = Image.open(LOGO_FILE).convert("RGBA")
-                logo.thumbnail((145, 145), Image.LANCZOS)
-                image = image.convert("RGBA")
-                image.alpha_composite(logo, (width - logo.width - 45, 35))
-                image = image.convert("RGB")
-                draw = ImageDraw.Draw(image)
-            except Exception:
-                pass
-
         image.save(filename, "JPEG", quality=95, optimize=True)
-        print("⚠️ وێنەی fallback ـی پڕۆفیشنالی ASO NEWS دروست کرا.")
+        print("⚠️ گرافیکی fallback ـی ASO NEWS دروست کرا.")
         return filename
 
     except Exception as e:
         print(f"❌ fallback error: {e}")
         return None
 
+
 def prepare_image(news):
     candidates = []
 
+    # Prefer article/RSS images, but reject obvious generic assets.
     if news.get("image_url"):
         candidates.append(news["image_url"])
 
     article_url = news.get("link")
-
     if article_url:
         try:
-            candidates.extend(
-                get_article_images(article_url)
-            )
+            candidates.extend(get_article_images(article_url))
         except Exception:
             pass
 
@@ -1253,30 +1344,26 @@ def prepare_image(news):
             with open(IMAGE_FILE, "wb") as f:
                 f.write(best["data"])
 
-            print(
-                f"📐 وێنە: {best['width']}x{best['height']}"
-            )
+            print(f"📐 وێنە: {best['width']}x{best['height']}")
 
             image_file = add_professional_overlay(
                 IMAGE_FILE,
-                news.get(
-                    "kur_title",
-                    news.get("title", "ASO NEWS")
-                )
+                news.get("kur_title", news.get("title", "ASO NEWS"))
             )
 
         except Exception as e:
             print(f"⚠️ image save/overlay error: {e}")
-            image_file = IMAGE_FILE
-
+            image_file = None
     else:
         print("⚠️ هیچ وێنەیەکی ڕاستەقینەی گونجاو نەدۆزرایەوە.")
-        image_file = create_fallback_image(
-            news.get(
-                "kur_title",
-                news.get("title", "ASO NEWS")
+
+        # NEW: event-specific Gemini image before generic fallback.
+        image_file = create_ai_news_image(news)
+
+        if not image_file:
+            image_file = create_fallback_image(
+                news.get("kur_title", news.get("title", "ASO NEWS"))
             )
-        )
 
     if image_file:
         image_file = add_watermark(image_file)
@@ -1429,7 +1516,15 @@ def publish_first_comment(post_id, comment):
             print(f"⚠️ comment request error: {e}")
 
     print("❌ هیچ یەکێک لە هەوڵەکانی کۆمێنت سەرکەوتوو نەبوو.")
-    print("ℹ️ ئەگەر پۆستەکە سەرکەوتووە و کۆمێنت نەکرا، زۆر بە ئەگەر permission ـی Page Access Token ـە (pages_manage_engagement) یان post ID ـە؛ کۆدەکە هەموو هەڵەی Facebook لە log پیشان دەدات.")
+    print(
+        "ℹ️ کۆدەکە تا ئەم خاڵە دروستە؛ Facebook ڕەتیکردووەتەوە. "
+        "بۆ کۆمێنتکردن بە ناوی پەیج، Page Access Token دەبێت "
+        "pages_manage_engagement هەبێت و Page task ـی MODERATE هەبێت."
+    )
+    print(
+        "ℹ️ ئەمە بە گۆڕینی کۆد بە تەنیا چارەسەر نابێت؛ "
+        "دەبێت token ـەکە بە permission ـە دروستەکان نوێ بکرێتەوە."
+    )
     return False
 
 def record_post(news, post_id):
@@ -1464,7 +1559,7 @@ def remove_old_image():
 
 def main():
     print("\n" + "=" * 64)
-    print("🇮🇶 ASO NEWS — AUTO PUBLISHER v5")
+    print("🇮🇶 ASO NEWS — AUTO PUBLISHER v6")
     print("=" * 64)
 
     candidates = collect_news()
