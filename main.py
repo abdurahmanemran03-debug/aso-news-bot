@@ -85,7 +85,7 @@ FACEBOOK_VIDEO_URL = (
 
 GEMINI_MODEL = os.environ.get(
     "GEMINI_MODEL",
-    "gemini-3.5-flash"
+    "gemini-3.1-flash-lite"
 )
 
 client = genai.Client(api_key=GEMINI_API_KEY)
@@ -708,14 +708,20 @@ def build_first_comment(news):
     full_body = clean_text(
         news.get("full_body", news.get("body", ""))
     )
-
     source = clean_text(news.get("source", ""))
+    link = clean_text(news.get("link", ""))
 
-    return (
+    if not full_body:
+        full_body = clean_text(news.get("body", ""))
+
+    comment = (
         "📌 درێژەی هەواڵ:\n\n"
         f"{full_body}\n\n"
         f"سەرچاوە: {source}"
     )
+    if link and link.startswith("http"):
+        comment += f"\n🔗 {link}"
+    return comment
 
 
 # ============================================================
@@ -729,8 +735,9 @@ def get_article_page(url):
     try:
         response = session.get(
             url,
-            timeout=20,
-            allow_redirects=True
+            timeout=25,
+            allow_redirects=True,
+            headers={"Accept": "text/html,application/xhtml+xml"}
         )
 
         if response.status_code != 200:
@@ -742,14 +749,30 @@ def get_article_page(url):
         print(f"⚠️ article page error: {e}")
         return ""
 
-
 def get_article_images(article_url):
-    page = get_article_page(article_url)
-
-    if not page:
+    """Collect likely article images, including the final redirected article URL."""
+    if not article_url:
         return []
 
     images = []
+    page = ""
+    final_url = article_url
+
+    try:
+        response = session.get(
+            article_url,
+            timeout=25,
+            allow_redirects=True,
+            headers={"Accept": "text/html,application/xhtml+xml"}
+        )
+        if response.status_code == 200:
+            page = response.text
+            final_url = response.url or article_url
+    except Exception as e:
+        print(f"⚠️ redirect/article error: {e}")
+
+    if not page:
+        return []
 
     patterns = [
         r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
@@ -761,99 +784,86 @@ def get_article_images(article_url):
     ]
 
     for pattern in patterns:
-        try:
-            for match in re.findall(pattern, page, re.IGNORECASE):
-                image_url = urljoin(
-                    article_url,
-                    html.unescape(match.strip())
-                )
-
-                if image_url.startswith("http") and image_url not in images:
-                    images.append(image_url)
-        except Exception:
-            pass
-
-    try:
-        html_images = re.findall(
-            r'<img[^>]+(?:src|data-src)=["\']([^"\']+)',
-            page,
-            re.IGNORECASE
-        )
-
-        for image_url in html_images:
-            image_url = urljoin(
-                article_url,
-                html.unescape(image_url.strip())
-            )
-
+        for match in re.findall(pattern, page, re.IGNORECASE):
+            image_url = urljoin(final_url, html.unescape(match.strip()))
             if image_url.startswith("http") and image_url not in images:
                 images.append(image_url)
 
+    try:
+        html_images = re.findall(
+            r'<img[^>]+(?:src|data-src|data-lazy-src)=["\']([^"\']+)',
+            page,
+            re.IGNORECASE
+        )
+        for image_url in html_images:
+            image_url = urljoin(final_url, html.unescape(image_url.strip()))
+            if image_url.startswith("http") and image_url not in images:
+                images.append(image_url)
     except Exception:
         pass
 
-    return images[:50]
-
-
-# ============================================================
-# 🖼️ DOWNLOAD IMAGE
-# ============================================================
+    return images[:80]
 
 def download_image_candidates(candidates):
+    """Download images and reject icons, placeholders and tiny/irrelevant assets."""
     best = None
     checked = set()
+    bad_words = (
+        "logo", "icon", "avatar", "favicon", "placeholder",
+        "default", "sprite", "profile", "blank", "dailyfeed"
+    )
 
     for image_url in candidates:
         if not image_url or image_url in checked:
             continue
-
         checked.add(image_url)
 
         try:
             print(f"🔎 پشکنینی وێنە: {image_url}")
+            low_url = image_url.lower()
+            if any(word in low_url for word in bad_words):
+                print("↪️ وێنەکە وەک logo/icon/placeholder ڕەتکرایەوە.")
+                continue
 
             response = session.get(
                 image_url,
-                timeout=20,
-                allow_redirects=True
+                timeout=25,
+                allow_redirects=True,
+                headers={"Accept": "image/avif,image/webp,image/jpeg,image/png,*/*"}
             )
-
             if response.status_code != 200:
                 continue
 
-            content_type = response.headers.get(
-                "content-type", ""
-            ).lower()
-
+            content_type = response.headers.get("content-type", "").lower()
             if "image" not in content_type:
                 continue
 
             data = response.content
-
-            if len(data) < 20_000:
+            if len(data) < 30_000:
                 continue
 
-            image = Image.open(BytesIO(data))
+            image = Image.open(BytesIO(data)).convert("RGB")
             width, height = image.size
-
-            if width < 700 or height < 400:
+            if width < 800 or height < 450:
                 continue
 
             aspect = width / height
+            # Strongly prefer normal news photos; reject obvious banners/square assets.
+            if aspect < 1.15 or aspect > 2.40:
+                continue
 
-            # Prefer normal news landscape images.
-            if 1.30 <= aspect <= 2.20:
-                aspect_bonus = 2.0
-            else:
-                aspect_bonus = 1.0
+            # Reject almost-empty images by checking simple variance.
+            small = image.resize((32, 32))
+            pixels = list(small.getdata())
+            avg = tuple(sum(p[i] for p in pixels) / len(pixels) for i in range(3))
+            variance = sum(
+                (sum(abs(p[i] - avg[i]) for i in range(3)) / 3)
+                for p in pixels
+            ) / len(pixels)
+            if variance < 5:
+                continue
 
-            if aspect < 0.90:
-                aspect_bonus *= 0.25
-
-            score = (
-                width * height * aspect_bonus
-                + len(data) / 100
-            )
+            score = (width * height) + (len(data) * 3) + (500_000 if 1.45 <= aspect <= 2.05 else 0)
 
             if best is None or score > best["score"]:
                 best = {
@@ -861,20 +871,13 @@ def download_image_candidates(candidates):
                     "url": image_url,
                     "width": width,
                     "height": height,
-                    "score": score
+                    "score": score,
                 }
 
         except Exception as e:
             print(f"⚠️ image error: {e}")
 
     return best
-
-
-# ============================================================
-# 🔤 FONT FINDER
-# ============================================================
-# Try Arabic/Kurdish-capable fonts first.
-# ============================================================
 
 def find_font(size, bold=False):
     bold_paths = [
@@ -1144,84 +1147,83 @@ def add_watermark(image_file):
 # ============================================================
 
 def create_fallback_image(title, filename=IMAGE_FILE):
+    """Create a clean professional fallback when a genuine article photo is unavailable."""
     try:
         width, height = 1200, 675
-
-        image = Image.new(
-            "RGB",
-            (width, height),
-            (18, 18, 22)
-        )
-
+        image = Image.new("RGB", (width, height), (11, 12, 17))
         draw = ImageDraw.Draw(image)
 
-        bold = find_font(48, bold=True)
-        small = find_font(28, bold=False)
+        # Subtle news-style background.
+        for r in range(80, 650, 55):
+            alpha = max(0, 55 - r // 15)
+            draw.ellipse(
+                [width - r, -r // 2, width + r, r // 2],
+                outline=(55, 58, 70),
+                width=2
+            )
 
-        draw.rectangle(
-            [0, 0, width, 12],
-            fill=(220, 30, 45)
-        )
+        draw.rectangle([0, 0, width, 12], fill=(220, 30, 45))
+        draw.rectangle([0, height - 12, width, height], fill=(220, 30, 45))
 
-        draw.text(
-            (60, 65),
-            "ASO NEWS",
-            fill=(255, 255, 255),
-            font=bold
-        )
+        brand = find_font(42, bold=True)
+        sub = find_font(24, bold=False)
+        title_font = find_font(42, bold=True)
 
-        draw.text(
-            (63, 125),
-            "KURDISTAN • IRAQ • WORLD",
-            fill=(220, 30, 45),
-            font=small
-        )
+        draw.text((55, 48), "ASO NEWS", font=brand, fill=(255, 255, 255))
+        draw.text((58, 105), "KURDISTAN  •  IRAQ  •  WORLD", font=sub, fill=(220, 30, 45))
 
+        # News badge.
         draw.rounded_rectangle(
-            [55, 205, width - 55, 570],
-            radius=25,
-            fill=(30, 30, 36),
-            outline=(220, 30, 45),
-            width=3
+            [55, 165, 250, 215], radius=18,
+            fill=(220, 30, 45), outline=(255, 255, 255), width=1
+        )
+        draw.text((80, 174), "NEWS", font=find_font(24, bold=True), fill=(255, 255, 255))
+
+        # Main title panel.
+        panel = [55, 245, width - 55, height - 65]
+        draw.rounded_rectangle(
+            panel, radius=28,
+            fill=(24, 25, 32), outline=(220, 30, 45), width=3
         )
 
-        lines = wrap_text(
-            draw,
-            clean_text(title),
-            bold,
-            width - 160
-        )[:4]
+        clean_title = clean_text(title)
+        # Smaller font and maximum 3 lines prevents the ugly clipped text seen before.
+        lines = wrap_text(draw, clean_title, title_font, width - 180)[:3]
+        if not lines:
+            lines = ["ASO NEWS"]
 
-        y = 270
-
+        total_h = len(lines) * 58
+        y = panel[1] + ((panel[3] - panel[1] - total_h) // 2)
         for line in lines:
             draw.text(
-                (width - 90, y),
-                line,
-                font=bold,
+                (width - 95, y), line,
+                font=title_font,
                 fill=(255, 255, 255),
-                anchor="ra"
+                anchor="ra",
+                stroke_width=1,
+                stroke_fill=(0, 0, 0)
             )
-            y += 60
+            y += 58
 
-        image.save(
-            filename,
-            "JPEG",
-            quality=95,
-            optimize=True
-        )
+        # Use the real logo if available.
+        if os.path.exists(LOGO_FILE):
+            try:
+                logo = Image.open(LOGO_FILE).convert("RGBA")
+                logo.thumbnail((145, 145), Image.LANCZOS)
+                image = image.convert("RGBA")
+                image.alpha_composite(logo, (width - logo.width - 45, 35))
+                image = image.convert("RGB")
+                draw = ImageDraw.Draw(image)
+            except Exception:
+                pass
 
-        print("⚠️ وێنەی fallback دروست کرا.")
+        image.save(filename, "JPEG", quality=95, optimize=True)
+        print("⚠️ وێنەی fallback ـی پڕۆفیشنالی ASO NEWS دروست کرا.")
         return filename
 
     except Exception as e:
         print(f"❌ fallback error: {e}")
         return None
-
-
-# ============================================================
-# 📸 PREPARE IMAGE
-# ============================================================
 
 def prepare_image(news):
     candidates = []
@@ -1380,58 +1382,55 @@ def publish_video(message, video_url):
 # ============================================================
 
 def publish_first_comment(post_id, comment):
+    """Publish the continuation as the first comment, with a safe retry strategy."""
     if not post_id or not comment:
+        print("⚠️ post_id یان comment بەتاڵە.")
         return False
 
     print("\n" + "=" * 64)
-    print("💬 FIRST COMMENT")
+    print("💬 FIRST COMMENT — دەستپێدەکات")
 
-    url = (
-        f"https://graph.facebook.com/"
-        f"{GRAPH_VERSION}/"
-        f"{post_id}/comments"
-    )
+    post_ids = [str(post_id).strip()]
+    # Some Facebook photo responses return the photo id instead of the feed post id.
+    if "_" not in str(post_id):
+        post_ids.append(f"{PAGE_ID}_{post_id}")
 
-    try:
-        response = session.post(
-            url,
-            data={
-                "access_token": FACEBOOK_PAGE_ACCESS_TOKEN,
-                "message": comment,
-            },
-            timeout=30
-        )
-
-        print(f"Comment status: {response.status_code}")
-        print(f"Comment response: {response.text}")
-
-        if response.status_code == 200:
-            print("✅ کۆمێنتی یەکەم بە سەرکەوتوویی کرا.")
-            return True
-
-        # Important: don't hide the actual Facebook reason.
+    for current_id in dict.fromkeys(post_ids):
+        url = f"https://graph.facebook.com/{GRAPH_VERSION}/{current_id}/comments"
         try:
-            error_data = response.json().get("error", {})
-            print(
-                "❌ Facebook comment error: "
-                f"{error_data.get('message', response.text)}"
+            response = session.post(
+                url,
+                data={
+                    "access_token": FACEBOOK_PAGE_ACCESS_TOKEN,
+                    "message": comment,
+                },
+                timeout=40,
             )
-            print(
-                "⚠️ ئەگەر پۆست کرا بەڵام کۆمێنت نەکرا، "
-                "زۆرجار هۆکارەکە permission/token ـە، نەک کۆدەکە."
-            )
-        except Exception:
-            pass
 
-    except Exception as e:
-        print(f"⚠️ comment request error: {e}")
+            print(f"Comment target: {current_id}")
+            print(f"Comment status: {response.status_code}")
+            print(f"Comment response: {response.text}")
 
+            if response.status_code == 200:
+                print("✅ کۆمێنتی یەکەم بە سەرکەوتوویی کرا.")
+                return True
+
+            try:
+                error_data = response.json().get("error", {})
+                message = error_data.get("message", response.text)
+                code = error_data.get("code", "?")
+                subcode = error_data.get("error_subcode", "?")
+                print(f"❌ Facebook comment error: {message}")
+                print(f"   code={code}, subcode={subcode}")
+            except Exception:
+                pass
+
+        except Exception as e:
+            print(f"⚠️ comment request error: {e}")
+
+    print("❌ هیچ یەکێک لە هەوڵەکانی کۆمێنت سەرکەوتوو نەبوو.")
+    print("ℹ️ ئەگەر پۆستەکە سەرکەوتووە و کۆمێنت نەکرا، زۆر بە ئەگەر permission ـی Page Access Token ـە (pages_manage_engagement) یان post ID ـە؛ کۆدەکە هەموو هەڵەی Facebook لە log پیشان دەدات.")
     return False
-
-
-# ============================================================
-# 💾 RECORD
-# ============================================================
 
 def record_post(news, post_id):
     posted_news.append({
@@ -1526,6 +1525,7 @@ def main():
         return
 
     print(f"\n✅ پۆست کرا: {post_id}")
+    time.sleep(2)
 
     # First comment is attempted AFTER the post is confirmed.
     if ENABLE_FIRST_COMMENT:
