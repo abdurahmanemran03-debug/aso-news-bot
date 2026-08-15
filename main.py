@@ -38,55 +38,187 @@ FACEBOOK_VIDEO_URL = f"https://graph.facebook.com/{PAGE_ID}/videos"
 # =========================================================
 # NEWS SOURCES
 # =========================================================
-# More sources = ASO NEWS identity, not BBC-only.
+# ASO NEWS priority:
+# 1) Kurdistan
+# 2) Iraq
+# 3) Middle East / World
+#
+# We use Google News RSS with site: filters for sources that do not
+# provide a stable public RSS feed. This also keeps the source name
+# attached to each article.
+# =========================================================
+
 RSS_SOURCES = [
+    # -----------------------------------------------------
+    # 🇹🇯 KURDISTAN — HIGHEST PRIORITY
+    # -----------------------------------------------------
     {
         "name": "Rudaw",
+        "region": "kurdistan",
+        "priority": 100,
         "url": (
             "https://news.google.com/rss/search?"
-            "q=site%3Arudaw.net+when%3A1d"
+            "q=site%3Arudaw.net+when%3A2d"
             "&hl=en-US&gl=US&ceid=US%3Aen"
         ),
     },
     {
         "name": "Kurdistan24",
+        "region": "kurdistan",
+        "priority": 100,
         "url": (
             "https://news.google.com/rss/search?"
-            "q=site%3Akurdistan24.net+when%3A1d"
+            "q=site%3Akurdistan24.net+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "NRT",
+        "region": "kurdistan",
+        "priority": 98,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Anrt-news.com+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "BasNews",
+        "region": "kurdistan",
+        "priority": 98,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Abasnews.com+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "Xendan",
+        "region": "kurdistan",
+        "priority": 96,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Axendan.org+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "PUKmedia",
+        "region": "kurdistan",
+        "priority": 94,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Apukmedia.com+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "Shafaq News",
+        "region": "kurdistan",
+        "priority": 92,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Ashafaq.com+Kurdistan+OR+Iraq+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+
+    # -----------------------------------------------------
+    # 🇮🇶 IRAQ — SECOND PRIORITY
+    # -----------------------------------------------------
+    {
+        "name": "Alsumaria News",
+        "region": "iraq",
+        "priority": 82,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Aalsumaria.tv+Iraq+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "Iraqi News",
+        "region": "iraq",
+        "priority": 78,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Airaqinews.com+Iraq+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "Iraq News",
+        "region": "iraq",
+        "priority": 76,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=Iraq+latest+news+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+
+    # -----------------------------------------------------
+    # 🌍 INTERNATIONAL — LOWER PRIORITY
+    # -----------------------------------------------------
+    {
+        "name": "Reuters",
+        "region": "world",
+        "priority": 48,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Areuters.com+Iraq+OR+Middle+East+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "Associated Press",
+        "region": "world",
+        "priority": 45,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Aapnews.com+Iraq+OR+Middle+East+when%3A2d"
             "&hl=en-US&gl=US&ceid=US%3Aen"
         ),
     },
     {
         "name": "Al Jazeera",
-        "url": "https://www.aljazeera.com/xml/rss/all.xml",
-    },
-    {
-        "name": "DW",
-        "url": "https://rss.dw.com/rdf/rss-en-all",
-    },
-    {
-        "name": "France 24",
-        "url": "https://www.france24.com/en/rss",
-    },
-    {
-        "name": "Reuters",
+        "region": "world",
+        "priority": 43,
         "url": (
             "https://news.google.com/rss/search?"
-            "q=site%3Areuters.com+when%3A1d"
-            "&hl=en-US&gl=US&ceid=US%3Aen"
-        ),
-    },
-    {
-        "name": "AP News",
-        "url": (
-            "https://news.google.com/rss/search?"
-            "q=site%3Aapnews.com+when%3A1d"
+            "q=site%3Aaljazeera.com+Iraq+OR+Kurdistan+OR+Middle+East+when%3A2d"
             "&hl=en-US&gl=US&ceid=US%3Aen"
         ),
     },
     {
         "name": "BBC News",
-        "url": "https://feeds.bbci.co.uk/news/rss.xml",
+        "region": "world",
+        "priority": 35,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Abbc.com+Iraq+OR+Kurdistan+OR+Middle+East+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "DW",
+        "region": "world",
+        "priority": 32,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Adw.com+Iraq+OR+Kurdistan+OR+Middle+East+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
+    },
+    {
+        "name": "France 24",
+        "region": "world",
+        "priority": 30,
+        "url": (
+            "https://news.google.com/rss/search?"
+            "q=site%3Afrance24.com+Iraq+OR+Kurdistan+OR+Middle+East+when%3A2d"
+            "&hl=en-US&gl=US&ceid=US%3Aen"
+        ),
     },
 ]
 
@@ -518,6 +650,92 @@ def find_media(entry):
 
 
 # =========================================================
+# NEWS PRIORITY / REGION CLASSIFICATION
+# =========================================================
+
+KURDISTAN_KEYWORDS = [
+    "kurdistan", "kurdish", "erbil", "erbīl", "irbil",
+    "sulaymaniyah", "sulaimani", "slemany", "duhok", "duhok",
+    "halabja", "kirkuk", "koysinjaq", "shaqlawa",
+    "hewler", "hawler",
+    "هەولێر", "هولێر", "سلێمانی", "دهۆک", "دهوک",
+    "هەڵەبجە", "کەرکووک", "کرکوک", "کوردستان",
+    "پەرلەمانی کوردستان", "حکومەتی هەرێم", "هەرێمی کوردستان",
+]
+
+IRAQ_KEYWORDS = [
+    "iraq", "iraqi", "baghdad", "basra", "mosul", "najaf",
+    "karbala", "anbar", "diyala", "wasit", "maysan",
+    "dhi qar", "diwaniyah", "samarra",
+    "عێراق", "عراقی", "بغداد", "بەسرە", "بەغدا", "مووسڵ",
+    "نجەف", "کەربەلا", "ئەنبار", "دیالە", "واسط", "میسان",
+]
+
+
+def text_contains_keyword(text, keywords):
+    text = clean_text(text).lower()
+    return any(keyword.lower() in text for keyword in keywords)
+
+
+def classify_news_region(news):
+    text = (
+        news.get("title", "")
+        + " "
+        + news.get("summary", "")
+    ).lower()
+
+    if text_contains_keyword(text, KURDISTAN_KEYWORDS):
+        return "kurdistan"
+
+    if text_contains_keyword(text, IRAQ_KEYWORDS):
+        return "iraq"
+
+    return news.get("region", "world")
+
+
+def news_priority_score(news):
+    source_priority = float(news.get("priority", 0))
+    region = classify_news_region(news)
+
+    # Strong editorial preference: Kurdistan > Iraq > World.
+    region_bonus = {
+        "kurdistan": 60,
+        "iraq": 32,
+        "world": 0,
+    }.get(region, 0)
+
+    age_hours = max(0.0, news.get("age_hours", 48.0))
+    if age_hours < 2:
+        freshness = 28
+    elif age_hours < 6:
+        freshness = 22
+    elif age_hours < 12:
+        freshness = 16
+    elif age_hours < 24:
+        freshness = 9
+    elif age_hours < 48:
+        freshness = 3
+    else:
+        freshness = 0
+
+    important_words = [
+        "breaking", "urgent", "attack", "strike", "explosion",
+        "drone", "missile", "killed", "war", "election",
+        "president", "government", "security", "crisis",
+        "هێرش", "تەقینەوە", "درۆن", "مووشەک", "کوژراو",
+        "جەنگ", "هەڵبژاردن", "سەرۆک", "حکومەت", "ئاسایش",
+        "فۆری", "قەیران",
+    ]
+
+    importance = 12 if text_contains_keyword(
+        news.get("title", "") + " " + news.get("summary", ""),
+        important_words
+    ) else 0
+
+    return source_priority + region_bonus + freshness + importance
+
+
+# =========================================================
 # NEWS COLLECTION
 # =========================================================
 
@@ -565,15 +783,30 @@ def collect_news():
                 ):
                     continue
 
-                all_news.append({
+                published = entry_date(item)
+                now = datetime.now(timezone.utc)
+                age_hours = (now - published).total_seconds() / 3600
+
+                # Ignore very old Google News results.
+                if published.year > 1971 and age_hours > 48:
+                    continue
+
+                news = {
                     "id": news_id,
                     "source": source["name"],
+                    "region": source.get("region", "world"),
+                    "priority": source.get("priority", 0),
                     "title": title,
                     "summary": summary,
                     "link": link,
                     "entry": item,
-                    "date": entry_date(item)
-                })
+                    "date": published,
+                    "age_hours": age_hours,
+                }
+
+                news["region"] = classify_news_region(news)
+                news["score"] = news_priority_score(news)
+                all_news.append(news)
 
         except Exception as e:
             print(
@@ -581,7 +814,7 @@ def collect_news():
             )
 
     all_news.sort(
-        key=lambda x: x["date"],
+        key=lambda x: x.get("score", 0),
         reverse=True
     )
 
@@ -593,102 +826,91 @@ def collect_news():
 # =========================================================
 
 def diverse_candidates(all_news):
-    by_source = {}
+    """
+    Build a candidate pool that strongly protects ASO NEWS identity:
+    Kurdistan first, Iraq second, international third.
+    """
+    kurdistan = [x for x in all_news if x.get("region") == "kurdistan"]
+    iraq = [x for x in all_news if x.get("region") == "iraq"]
+    world = [x for x in all_news if x.get("region") == "world"]
 
-    for item in all_news:
-        by_source.setdefault(
-            item["source"],
-            []
-        ).append(item)
+    kurdistan.sort(key=lambda x: x.get("score", 0), reverse=True)
+    iraq.sort(key=lambda x: x.get("score", 0), reverse=True)
+    world.sort(key=lambda x: x.get("score", 0), reverse=True)
 
-    # Maximum 3 candidates per source.
-    for source in by_source:
-        by_source[source] = by_source[source][:3]
+    # Target mix: up to 6 Kurdistan + 4 Iraq + 2 world.
+    # If one category is empty, its slots are automatically filled by the next.
+    selected = []
+    selected.extend(kurdistan[:6])
+    selected.extend(iraq[:4])
+    selected.extend(world[:2])
 
-    result = []
-    round_number = 0
-    sources = list(by_source.keys())
+    used_ids = {x["id"] for x in selected}
 
-    while len(result) < MAX_CANDIDATES:
-        added = False
+    if len(selected) < MAX_CANDIDATES:
+        remaining = [
+            x for x in all_news
+            if x["id"] not in used_ids
+        ]
+        remaining.sort(
+            key=lambda x: x.get("score", 0),
+            reverse=True
+        )
+        selected.extend(remaining[:MAX_CANDIDATES - len(selected)])
 
-        for source in sources:
-            items = by_source[source]
-
-            if round_number < len(items):
-                result.append(
-                    items[round_number]
-                )
-
-                added = True
-
-                if len(result) >= MAX_CANDIDATES:
-                    break
-
-        if not added:
-            break
-
-        round_number += 1
-
-    return result
+    return selected[:MAX_CANDIDATES]
 
 
 # =========================================================
 # GEMINI WRITER
 # =========================================================
 
-def generate_news_post(candidates):
-    news_text = ""
-
-    for i, item in enumerate(
-        candidates,
-        start=1
-    ):
-        news_text += f"""
-[{i}]
-سەرچاوە: {item['source']}
-سەردێڕ: {item['title']}
-پوختە: {item['summary']}
-لینک: {item['link']}
-"""
-
+def generate_news_post(selected_news):
+    """
+    Gemini only writes the already-selected article.
+    Article selection is deterministic: Kurdistan > Iraq > World.
+    This prevents Gemini from accidentally choosing an international
+    story when a suitable Kurdistan/Iraq story exists.
+    """
     prompt = f"""
 تۆ دەستکارێکی هەواڵی پیشەیی بۆ ASO NEWS ـیت.
 
-لە نێوان هەواڵەکانی خوارەوە تەنها یەک هەواڵ هەڵبژێرە
-و بە کوردی سۆرانیی ڕەوان و بێ هەڵەی تایپی بیگۆڕە بۆ پۆستی Facebook.
+ئەم هەواڵە بۆ بڵاوکردنەوە هەڵبژێردراوە:
 
-یاساکان:
-- هیچ زانیارییەکی خۆت زیاد مەکە.
-- هیچ شتێک مەخەمنە.
-- ژمارە و بەروارەکان مەگۆڕە.
-- ناوی کەس و شوێن مەگۆڕە.
-- شیکاری سیاسی مەکە.
-- سەردێڕ کورت و ڕوون بێت.
-- دەقەکە کورت و زانیاری‌دار بێت.
-- ئەگەر هەمان ڕووداو لە چەند سەرچاوەیەکدا هەبوو،
-  تەنها یەکێکیان هەڵبژێرە.
-- سەرچاوەکە بە دروستی بنووسە.
-- هەوڵ بدە سەرچاوەکان جۆراوجۆر بن، نەک تەنها BBC.
+سەرچاوە: {selected_news['source']}
+ناوچە: {selected_news['region']}
+سەردێڕ: {selected_news['title']}
+پوختە: {selected_news['summary']}
+لینک: {selected_news['link']}
 
-فۆرمات:
-SOURCE_NUMBER: ژمارە
+ئەرک:
+هەمان هەواڵ بە زمانی کوردی سۆرانییەکی ڕوون و پیشەیی بنووسە.
+هیچ زانیارییەکی نوێ لە خۆتەوە زیاد مەکە.
+ژمارە، ناو، شوێن و بەروار مەگۆڕە.
+شیکاری سیاسی یان پێشبینی مەکە.
 
-TITLE: سەردێڕ
+پۆستی سەرەکی دەبێت کورت بێت: 2 تا 3 ڕستە.
+FULL_BODY دەبێت درێژەی هەمان هەواڵ بێت: 2 تا 4 پاراگرافی کورت.
+FULL_BODY نابێت هیچ شتێکی لە سەرچاوەکەدا نییە زیاد بکات.
+
+تەنها ئەم فۆرماتە بەکاربهێنە:
+
+TITLE:
+سەردێڕی کوردی
 
 BODY:
-دەقی هەواڵ
+2 تا 3 ڕستەی کورت
+
+FULL_BODY:
+وردەکارییەکانی هەمان هەواڵ لە 2 تا 4 پاراگرافی کورت
 
 HASHTAGS:
 #ASONEWS #هەواڵ #کوردستان
 
 SOURCE:
-ناوی سەرچاوە
+{selected_news['source']}
 
 هیچ دەقێکی تر زیاد مەکە.
-
-هەواڵەکان:
-{news_text}
 """
 
     try:
@@ -697,7 +919,7 @@ SOURCE:
             contents=prompt
         )
 
-        return response.text.strip()
+        return response.text.strip() if response and response.text else None
 
     except Exception as e:
         print(f"❌ کێشە لە Gemini: {e}")
@@ -712,79 +934,61 @@ def parse_gemini_result(result):
     if not result:
         return None
 
-    source_match = re.search(
-        r"SOURCE_NUMBER:\s*(\d+)",
-        result,
-        re.IGNORECASE
-    )
-
     title_match = re.search(
-        r"TITLE:\s*(.+)",
+        r"TITLE\s*:\s*(.*?)(?=\n\s*BODY\s*:)",
         result,
-        re.IGNORECASE
+        re.IGNORECASE | re.DOTALL
     )
 
     body_match = re.search(
-        r"BODY:\s*(.*?)(?=\nHASHTAGS:)",
+        r"BODY\s*:\s*(.*?)(?=\n\s*FULL_BODY\s*:)",
+        result,
+        re.IGNORECASE | re.DOTALL
+    )
+
+    full_body_match = re.search(
+        r"FULL_BODY\s*:\s*(.*?)(?=\n\s*HASHTAGS\s*:)",
         result,
         re.IGNORECASE | re.DOTALL
     )
 
     hashtags_match = re.search(
-        r"HASHTAGS:\s*(.*?)(?=\nSOURCE:)",
+        r"HASHTAGS\s*:\s*(.*?)(?=\n\s*SOURCE\s*:)",
         result,
         re.IGNORECASE | re.DOTALL
     )
 
-    source_name_match = re.search(
-        r"SOURCE:\s*(.+)",
+    source_match = re.search(
+        r"SOURCE\s*:\s*(.+)",
         result,
         re.IGNORECASE
     )
 
-    if not source_match:
-        return None
-
-    try:
-        source_number = int(
-            source_match.group(1)
-        )
-    except ValueError:
-        return None
-
-    title = (
-        title_match.group(1).strip()
-        if title_match
-        else ""
-    )
-
-    body = (
-        body_match.group(1).strip()
-        if body_match
-        else ""
-    )
-
-    hashtags = (
-        hashtags_match.group(1).strip()
-        if hashtags_match
-        else "#ASONEWS"
-    )
-
-    source_name = (
-        source_name_match.group(1).strip()
-        if source_name_match
-        else ""
-    )
+    title = clean_text(title_match.group(1)) if title_match else ""
+    body = clean_text(body_match.group(1)) if body_match else ""
+    full_body = clean_text(full_body_match.group(1)) if full_body_match else ""
+    hashtags = clean_text(hashtags_match.group(1)) if hashtags_match else "#ASONEWS #هەواڵ #کوردستان"
+    source_name = clean_text(source_match.group(1)) if source_match else ""
 
     if not title or not body:
         return None
 
+    if not full_body:
+        full_body = body
+
+    if "#ASONEWS" not in hashtags:
+        hashtags += " #ASONEWS"
+    if "کوردستان" not in hashtags and "Kurdistan" not in hashtags:
+        hashtags += " #کوردستان"
+    if "عێراق" not in hashtags and "Iraq" not in hashtags:
+        hashtags += " #عێراق"
+
     return {
-        "source_number": source_number,
         "title": title,
         "body": body,
+        "full_body": full_body,
         "hashtags": hashtags,
-        "source_name": source_name
+        "source_name": source_name,
     }
 
 
@@ -795,6 +999,53 @@ def build_post(parsed):
         f"{parsed['hashtags']}\n\n"
         f"سەرچاوە: {parsed['source_name']}"
     )
+
+
+def build_first_comment(parsed):
+    return (
+        "📌 درێژەی هەواڵ:\n\n"
+        f"{parsed['full_body']}\n\n"
+        f"سەرچاوە: {parsed['source_name']}"
+    )
+
+
+# =========================================================
+# FACEBOOK FIRST COMMENT
+# =========================================================
+
+def publish_first_comment(post_id, comment):
+    if not post_id:
+        return False
+
+    print("\n" + "=" * 60)
+    print("💬 FIRST COMMENT")
+    print("=" * 60)
+
+    try:
+        url = f"https://graph.facebook.com/{post_id}/comments"
+
+        response = session.post(
+            url,
+            data={
+                "access_token": FACEBOOK_PAGE_ACCESS_TOKEN,
+                "message": comment,
+            },
+            timeout=60
+        )
+
+        print(f"Status: {response.status_code}")
+        print(response.text)
+
+        if response.status_code == 200:
+            print("✅ First comment posted.")
+            return True
+
+        print("⚠️ پۆست کرا، بەڵام کۆمێنتی یەکەم نەکرا.")
+        return False
+
+    except Exception as e:
+        print(f"⚠️ کێشەی کۆمێنت: {e}")
+        return False
 
 
 # =========================================================
@@ -960,42 +1211,57 @@ def publish_video(video_path, message):
 # MAIN
 # =========================================================
 
+def choose_news(all_news):
+    """
+    Deterministic editorial order:
+    1) Kurdistan
+    2) Iraq
+    3) World
+
+    Within each region, the highest scoring and freshest story wins.
+    """
+    for region in ("kurdistan", "iraq", "world"):
+        pool = [x for x in all_news if x.get("region") == region]
+        if pool:
+            pool.sort(key=lambda x: x.get("score", 0), reverse=True)
+            return pool[0]
+
+    return None
+
+
 def main():
     print("\n" + "=" * 60)
-    print("🇹🇯 ASO NEWS — AUTO PUBLISHER")
+    print("🇹🇯 ASO NEWS — AUTO PUBLISHER v5")
     print("=" * 60)
+    print("📌 Editorial priority: KURDISTAN > IRAQ > WORLD")
 
     all_news = collect_news()
 
     if not all_news:
-        print(
-            "ℹ️ هیچ هەواڵێکی نوێ نییە."
-        )
+        print("ℹ️ هیچ هەواڵێکی نوێ نییە.")
         return
 
+    print(f"✅ {len(all_news)} هەواڵی نوێ دۆزرایەوە.")
+
+    selected_news = choose_news(all_news)
+
+    if not selected_news:
+        print("❌ هیچ هەواڵێک بۆ بڵاوکردنەوە هەڵنەبژێردرا.")
+        return
+
+    print("\n🎯 هەواڵی هەڵبژێردراو:")
     print(
-        f"✅ {len(all_news)} هەواڵی نوێ دۆزرایەوە."
+        f"[{selected_news['region']}] "
+        f"[{selected_news['source']}] "
+        f"score={selected_news.get('score', 0):.1f}\n"
+        f"{selected_news['title']}"
     )
 
-    candidates = diverse_candidates(
-        all_news
-    )
-
-    print("\n📊 هەواڵەکانی Gemini:")
-    for i, item in enumerate(
-        candidates,
-        start=1
-    ):
-        print(
-            f"{i}. [{item['source']}] "
-            f"{item['title']}"
-        )
-
-    result = generate_news_post(
-        candidates
-    )
+    # Gemini only writes the selected article.
+    result = generate_news_post(selected_news)
 
     if not result:
+        print("❌ Gemini هیچ دەقێکی نەگەڕاندەوە.")
         return
 
     print("\n" + "=" * 60)
@@ -1003,46 +1269,28 @@ def main():
     print("=" * 60)
     print(result)
 
-    parsed = parse_gemini_result(
-        result
-    )
+    parsed = parse_gemini_result(result)
 
     if not parsed:
-        print(
-            "❌ Gemini result نادروستە."
-        )
+        print("❌ Gemini result نادروستە.")
         return
 
-    selected_index = parsed[
-        "source_number"
-    ]
-
-    if (
-        selected_index < 1
-        or selected_index > len(candidates)
-    ):
-        print(
-            "❌ ژمارەی هەڵبژێردراو نادروستە."
-        )
-        return
-
-    selected_news = candidates[
-        selected_index - 1
-    ]
-
-    post = build_post(
-        parsed
-    )
+    post = build_post(parsed)
+    first_comment = build_first_comment(parsed)
 
     print("\n" + "=" * 60)
     print("📰 ASO NEWS — FINAL POST")
     print("=" * 60)
     print(post)
 
+    print("\n" + "=" * 60)
+    print("💬 FIRST COMMENT — PREVIEW")
+    print("=" * 60)
+    print(first_comment)
+
     # -----------------------------------------------------
     # Find media
     # -----------------------------------------------------
-
     print("\n📸/🎥 بەدوای میدیادا دەگەڕێین...")
 
     image_candidates, video_candidates = find_media(
@@ -1051,39 +1299,28 @@ def main():
 
     facebook_response = None
 
-    # Prefer a direct video if the source exposes one.
+    # Prefer a direct video if available.
     if video_candidates:
-        video_path = download_video(
-            video_candidates[0]
-        )
-
+        video_path = download_video(video_candidates[0])
         if video_path:
             facebook_response = publish_video(
                 video_path,
                 post
             )
 
-    # Otherwise use a branded photo.
+    # Otherwise use branded photo.
     if facebook_response is None:
-        image_path = download_best_image(
-            image_candidates
-        )
+        image_path = download_best_image(image_candidates)
 
         if not image_path:
-            print(
-                "⚠️ هیچ وێنەیەکی کوالێتی باش نەدۆزرایەوە؛ fallback بەکاردێت."
-            )
-            image_path = create_fallback_image(
-                parsed["title"]
-            )
+            print("⚠️ وێنەی کوالێتی باش نەدۆزرایەوە؛ fallback بەکاردێت.")
+            image_path = create_fallback_image(parsed["title"])
 
         if not image_path:
-            print("❌ نەتوانرا هیچ وێنەیەک دروست بکرێت.")
+            print("❌ نەتوانرا وێنەیەک دروست بکرێت.")
             return
 
-        branded_image = add_aso_logo(
-            image_path
-        )
+        branded_image = add_aso_logo(image_path)
 
         facebook_response = publish_photo(
             branded_image,
@@ -1091,34 +1328,66 @@ def main():
         )
 
     # -----------------------------------------------------
-    # Save history only after successful Facebook post.
+    # Facebook post success
     # -----------------------------------------------------
-
-    if (
+    if not (
         facebook_response
         and facebook_response.status_code == 200
     ):
-        posted_news.append(
-            selected_news["id"]
-        )
+        print("\n❌ Facebook پۆستەکەی قبوڵ نەکرد.")
+        return
 
-        save_history(
-            posted_news
-        )
+    # Extract post ID from Facebook response.
+    try:
+        facebook_data = facebook_response.json()
+    except Exception:
+        facebook_data = {}
 
-        print(
-            "\n✅ پۆست بە سەرکەوتوویی بڵاوکرایەوە."
-        )
+    post_id = (
+        facebook_data.get("post_id")
+        or facebook_data.get("id")
+    )
 
+    if not post_id:
+        print("⚠️ پۆست کرا، بەڵام post_id نەدۆزرایەوە؛ کۆمێنت ناتوانرێت بنێردرێت.")
     else:
-        print(
-            "\n❌ Facebook پۆستەکەی قبوڵ نەکرد."
+        print(f"✅ Facebook post ID: {post_id}")
+
+        # -------------------------------------------------
+        # First comment with FULL_BODY
+        # -------------------------------------------------
+        comment_ok = publish_first_comment(
+            post_id,
+            first_comment
         )
 
-    # -----------------------------------------------------
-    # Cleanup
-    # -----------------------------------------------------
+        if not comment_ok:
+            print("⚠️ هەواڵەکە پۆست کرا، بەڵام کۆمێنتی یەکەم سەرکەوتوو نەبوو.")
 
+    # -----------------------------------------------------
+    # History: save only after the Facebook post succeeds.
+    # -----------------------------------------------------
+    posted_news.append({
+        "id": selected_news["id"],
+        "title": selected_news["title"],
+        "source": selected_news["source"],
+        "region": selected_news["region"],
+        "link": selected_news["link"],
+        "post_id": post_id,
+        "timestamp": int(datetime.now(timezone.utc).timestamp()),
+    })
+
+    save_history(posted_news)
+
+    print("\n" + "=" * 60)
+    print("✅ پۆست بە سەرکەوتوویی بڵاوکرایەوە.")
+    if post_id:
+        print(f"🆔 POST ID: {post_id}")
+    print(f"📰 SOURCE: {selected_news['source']}")
+    print(f"📍 REGION: {selected_news['region']}")
+    print("=" * 60)
+
+    # Cleanup temporary files.
     for filename in [
         "news_image.jpg",
         "news_image_branded.jpg",
