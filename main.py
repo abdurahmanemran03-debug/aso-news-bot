@@ -16,21 +16,22 @@ from google import genai
 
 
 # ============================================================
-# 🇮🇶 ASO NEWS — AUTO PUBLISHER v8
+# 🇮🇶 ASO NEWS — AUTO PUBLISHER v9
 # ============================================================
 # Main improvements:
 # 1) Kurdistan/Iraq sources have higher priority.
 # 2) More sources are searched through Google News RSS.
 # 3) Real article images are preferred.
 # 4) A professional ASO NEWS graphic is placed over the real image.
-# 5) If no real image is available, Gemini creates an event-specific editorial illustration.
+# 5) If no real image is available, Gemini/Nano Banana Pro is tried first.
+#    Pollinations is then used as an independent image-generation fallback.
 # 6) First comment is attempted after publishing; permission errors are diagnosed clearly.
 # 7) History prevents duplicate posts.
 # 8) One post per workflow run.
 # ============================================================
 
 print("=" * 64)
-print("🇮🇶 ASO NEWS — AUTO PUBLISHER v8")
+print("🇮🇶 ASO NEWS — AUTO PUBLISHER v9")
 print("=" * 64)
 
 
@@ -40,6 +41,7 @@ print("=" * 64)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 FACEBOOK_PAGE_ACCESS_TOKEN = os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN")
+POLLINATIONS_API_KEY = os.environ.get("POLLINATIONS_API_KEY")
 
 if not GEMINI_API_KEY:
     raise RuntimeError("❌ GEMINI_API_KEY نەدۆزرایەوە.")
@@ -79,6 +81,10 @@ FACEBOOK_VIDEO_URL = (
     f"https://graph.facebook.com/{GRAPH_VERSION}/{PAGE_ID}/videos"
 )
 
+
+# Pollinations is an independent image fallback. Create an API key and
+# store it in GitHub Actions Secrets as POLLINATIONS_API_KEY.
+# It is only used when Gemini image generation fails.
 
 # ============================================================
 # 🤖 GEMINI
@@ -1069,16 +1075,6 @@ def add_professional_overlay(
 
             y += line_height
 
-        # Brand.
-        draw.text(
-            (55, height - 58),
-            "ASO NEWS",
-            font=brand_font,
-            fill=(220, 30, 45, 255),
-            stroke_width=1,
-            stroke_fill=(0, 0, 0, 180)
-        )
-
         result = Image.alpha_composite(
             image.convert("RGBA"),
             overlay
@@ -1154,68 +1150,81 @@ def add_watermark(image_file):
 # 🖼️ IMAGE PIPELINE — REAL PHOTO → NANO BANANA PRO
 # ============================================================
 
-def create_ai_news_image(news, filename=IMAGE_FILE):
-    """Generate a high-quality editorial news visual with Nano Banana Pro.
+def _save_generated_image(image_data, filename):
+    """Validate and save generated image bytes as a 1200x675 JPEG."""
+    if isinstance(image_data, str):
+        image_data = base64.b64decode(image_data)
 
-    Important design rule: Gemini creates ONLY the visual. It must not create
-    ASO NEWS branding, logos, captions, fake UI, or headline text. The single
-    official logo is added later by add_watermark().
-    """
+    if not image_data or len(image_data) < 20_000:
+        return False
+
+    with Image.open(BytesIO(image_data)) as generated:
+        generated = generated.convert("RGB")
+        generated = fit_cover(generated, (1200, 675))
+        generated.save(filename, "JPEG", quality=96, optimize=True)
+
+    with Image.open(filename) as check:
+        check.verify()
+
+    return True
+
+
+def build_ai_image_prompt(news):
+    """Build a strong editorial prompt from the selected story."""
     title = clean_text(news.get("kur_title", news.get("title", "NEWS")))
     body = clean_text(news.get("body", news.get("summary", "")))
     source = clean_text(news.get("source", ""))
-    article_url = clean_text(news.get("link", ""))
 
-    # Keep the prompt focused. Gemini 3 image models work best with clear,
-    # direct instructions rather than a long list of conflicting constraints.
-    prompt = f"""
-Create a premium editorial news photograph for a Kurdish digital news outlet.
+    return f"""
+Create a premium, photorealistic editorial-news image for a professional Kurdish
+news page called ASO NEWS.
 
-Story headline:
+NEWS HEADLINE:
 {title}
 
-Story summary:
+NEWS SUMMARY:
 {body}
 
-Source:
+SOURCE:
 {source}
 
-Reference article:
-{article_url}
+Create one coherent 16:9 landscape composition that visually explains the
+specific event in the headline and summary. The image must look like a real
+international newsroom photograph, not a poster, cartoon, stock collage, or
+Canva template.
 
-Visual direction:
-- Create a believable, photorealistic editorial-news scene that clearly
-  communicates the story above.
-- Treat the image as an editorial reconstruction, NOT as a claim that this is
-  an exact photograph of the real event.
-- If the story involves officials or political meetings, show a realistic
-  government/meeting environment, podium, conference table, security setting,
-  vehicles, government buildings, or other relevant contextual visuals instead
-  of inventing a recognizable person's face.
-- If a person must appear, keep them generic/unidentifiable unless the prompt
-  explicitly provides a reference image.
-- Premium international-news photography look: realistic lens, natural skin
-  and materials, believable lighting, documentary composition, crisp detail,
-  subtle depth of field, restrained color grading.
-- Strong focal subject, clean hierarchy, and visual storytelling suitable for
-  a professional Facebook news post.
-- 16:9 landscape.
+If the story concerns a named public figure, government official, city, landmark,
+aircraft, military/security event, meeting, disaster, or other identifiable
+subject, represent those subjects clearly and realistically when appropriate.
+For example, if the story is about a named official arriving in Erbil, show that
+official in a believable arrival/meeting context with Erbil landmarks or airport
+context. If the exact event cannot be truthfully reconstructed, make it an
+editorial reconstruction rather than pretending it is an actual photograph.
 
-Absolutely do not include:
-- any words, letters, headlines, captions, numbers, signs, or readable text
-- any logo, watermark, ASO NEWS mark, brand mark, badge, UI, screenshot,
-  social-media frame, poster layout, or template
-- fake news-channel graphics or decorative title boxes
-- exaggerated fantasy/cinematic effects
+Use realistic anatomy, realistic architecture, believable vehicles and aircraft,
+natural lighting, documentary photography, professional lens depth, sharp main
+subject, subtle cinematic color grading, accurate proportions, and strong visual
+hierarchy. Make the scene immediately understandable from the image alone.
 
-The final output must look like a high-end editorial news photograph, not a
-Canva template or generic graphic.
+Do NOT include any readable words, captions, headlines, numbers, logos,
+watermarks, UI elements, borders, fake news graphics, social-media frames,
+Canva-style boxes, or decorative text. Do not put ASO NEWS branding inside the
+image; branding is added separately by the program.
+
+The result must be a polished 16:9 editorial news photograph suitable for a
+major digital news outlet.
 """.strip()
 
+
+def create_ai_news_image(news, filename=IMAGE_FILE):
+    """Try Gemini image generation first, then Pollinations as a fallback."""
+    prompt = build_ai_image_prompt(news)
+
+    # Provider 1: Gemini / Nano Banana Pro.
     for attempt in range(1, 3):
         try:
             print("\n" + "=" * 64)
-            print(f"🎨 NANO BANANA PRO — IMAGE ATTEMPT {attempt}/2")
+            print(f"🎨 GEMINI IMAGE — ATTEMPT {attempt}/2")
             print(f"🎨 IMAGE MODEL: {GEMINI_IMAGE_MODEL}")
 
             interaction = client.interactions.create(
@@ -1232,32 +1241,65 @@ Canva template or generic graphic.
             output_image = getattr(interaction, "output_image", None)
             image_data = getattr(output_image, "data", None)
 
-            if not image_data:
-                print("⚠️ Nano Banana Pro بەڵگەی وێنەی نەگەڕاندەوە.")
-                continue
+            if image_data and _save_generated_image(image_data, filename):
+                print("✅ Gemini image وێنەی پڕۆفیشنالی دروست کرد.")
+                return filename
 
-            if isinstance(image_data, str):
-                image_data = base64.b64decode(image_data)
-
-            with Image.open(BytesIO(image_data)) as generated:
-                generated = generated.convert("RGB")
-                generated = fit_cover(generated, (1200, 675))
-                generated.save(filename, "JPEG", quality=96, optimize=True)
-
-            # Verify the file can be reopened after saving.
-            with Image.open(filename) as check:
-                check.verify()
-
-            print("✅ Nano Banana Pro وێنەی پڕۆفیشنالی دروست کرد.")
-            return filename
+            print("⚠️ Gemini هیچ وێنەیەکی دروستی نەگەڕاندەوە.")
 
         except Exception as e:
-            print(f"⚠️ Nano Banana Pro image error (attempt {attempt}): {e}")
+            print(f"⚠️ Gemini image error (attempt {attempt}): {e}")
             if attempt < 2:
                 time.sleep(3)
 
-    print("❌ دوو هەوڵی Nano Banana Pro سەرکەوتوو نەبوون.")
+    # Provider 2: Pollinations. This is deliberately independent from Gemini's quota.
+    if not POLLINATIONS_API_KEY:
+        print("⚠️ POLLINATIONS_API_KEY نەدۆزرایەوە؛ fallback ـی دووەم بەردەست نییە.")
+        return None
+
+    poll_models = [
+        os.environ.get("POLLINATIONS_IMAGE_MODEL", "flux"),
+        "zimage",
+    ]
+
+    for model_name in dict.fromkeys(poll_models):
+        try:
+            print("\n" + "=" * 64)
+            print("🎨 POLLINATIONS — IMAGE FALLBACK")
+            print(f"🎨 IMAGE MODEL: {model_name}")
+
+            encoded_prompt = quote(prompt, safe="")
+            url = f"https://gen.pollinations.ai/image/{encoded_prompt}"
+            response = session.get(
+                url,
+                params={
+                    "model": model_name,
+                    "width": 1536,
+                    "height": 864,
+                    "quality": "high",
+                    "safe": "true",
+                },
+                headers={
+                    "Authorization": f"Bearer {POLLINATIONS_API_KEY}",
+                    "Accept": "image/jpeg,image/png,*/*",
+                },
+                timeout=180,
+            )
+
+            print(f"Pollinations status: {response.status_code}")
+
+            if response.status_code == 200 and _save_generated_image(response.content, filename):
+                print("✅ Pollinations وێنەی پڕۆفیشنالی دروست کرد.")
+                return filename
+
+            print(f"⚠️ Pollinations image error: {response.text[:500]}")
+
+        except Exception as e:
+            print(f"⚠️ Pollinations exception: {e}")
+
+    print("❌ هەموو provider ـەکانی وێنە شکستیان هێنا.")
     return None
+
 
 def prepare_image(news):
     candidates = []
@@ -1298,9 +1340,8 @@ def prepare_image(news):
     else:
         print("⚠️ هیچ وێنەیەکی ڕاستەقینەی گونجاو نەدۆزرایەوە.")
 
-        # Generate a real editorial visual with Nano Banana Pro.
-        # Do NOT fall back to the old generic template: a bad visual is worse
-        # than skipping the post.
+        # Generate a real editorial visual with Gemini first, then Pollinations.
+        # Never use the old generic fallback template.
         image_file = create_ai_news_image(news)
 
         if not image_file:
