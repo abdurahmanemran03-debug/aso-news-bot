@@ -13,6 +13,10 @@ import feedparser
 
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont, ImageFilter
 from google import genai
+try:
+    from huggingface_hub import InferenceClient
+except Exception:
+    InferenceClient = None
 
 
 # ============================================================
@@ -42,6 +46,7 @@ print("=" * 64)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 FACEBOOK_PAGE_ACCESS_TOKEN = os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN")
 POLLINATIONS_API_KEY = os.environ.get("POLLINATIONS_API_KEY")
+HF_TOKEN = os.environ.get("HF_TOKEN")
 
 if not GEMINI_API_KEY:
     raise RuntimeError("❌ GEMINI_API_KEY نەدۆزرایەوە.")
@@ -1296,6 +1301,42 @@ def create_ai_news_image(news, filename=IMAGE_FILE):
 
         except Exception as e:
             print(f"⚠️ Pollinations exception: {e}")
+
+    # Provider 3: Hugging Face Inference Providers.
+    # Free Hugging Face accounts currently receive a small monthly credit;
+    # if the credit is exhausted, this provider fails cleanly and the post is
+    # still blocked rather than publishing without an image.
+    if not HF_TOKEN:
+        print("⚠️ HF_TOKEN نەدۆزرایەوە؛ fallback ـی Hugging Face بەردەست نییە.")
+        return None
+
+    if InferenceClient is None:
+        print("⚠️ huggingface_hub دانەمەزراوە؛ fallback ـی Hugging Face بەردەست نییە.")
+        return None
+
+    try:
+        print("\n" + "=" * 64)
+        print("🎨 HUGGING FACE — IMAGE FALLBACK")
+        print("🎨 IMAGE MODEL: black-forest-labs/FLUX.1-schnell")
+
+        hf_client = InferenceClient(
+            provider="fal-ai",
+            api_key=HF_TOKEN,
+            timeout=180,
+        )
+
+        image = hf_client.text_to_image(
+            prompt=prompt,
+            model="black-forest-labs/FLUX.1-schnell",
+        )
+
+        # InferenceClient returns a PIL Image for text_to_image.
+        image.save(filename, format="JPEG", quality=95)
+        print("✅ Hugging Face وێنەی پڕۆفیشنالی دروست کرد.")
+        return filename
+
+    except Exception as e:
+        print(f"⚠️ Hugging Face image error: {e}")
 
     print("❌ هەموو provider ـەکانی وێنە شکستیان هێنا.")
     return None
