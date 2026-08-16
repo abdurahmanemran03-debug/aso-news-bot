@@ -16,7 +16,7 @@ from google import genai
 
 
 # ============================================================
-# 🇮🇶 ASO NEWS — AUTO PUBLISHER v7
+# 🇮🇶 ASO NEWS — AUTO PUBLISHER v8
 # ============================================================
 # Main improvements:
 # 1) Kurdistan/Iraq sources have higher priority.
@@ -30,7 +30,7 @@ from google import genai
 # ============================================================
 
 print("=" * 64)
-print("🇮🇶 ASO NEWS — AUTO PUBLISHER v7")
+print("🇮🇶 ASO NEWS — AUTO PUBLISHER v8")
 print("=" * 64)
 
 
@@ -1151,172 +1151,113 @@ def add_watermark(image_file):
 
 
 # ============================================================
-# 🖼️ IMAGE FALLBACK — REAL PHOTO → GEMINI ILLUSTRATION → ASO GRAPHIC
+# 🖼️ IMAGE PIPELINE — REAL PHOTO → NANO BANANA PRO
 # ============================================================
 
 def create_ai_news_image(news, filename=IMAGE_FILE):
-    """Create a clean professional editorial image with Gemini Image.
+    """Generate a high-quality editorial news visual with Nano Banana Pro.
 
-    Gemini is instructed to produce NO branding/text. The official ASO NEWS
-    logo is added exactly once by add_watermark() after generation.
+    Important design rule: Gemini creates ONLY the visual. It must not create
+    ASO NEWS branding, logos, captions, fake UI, or headline text. The single
+    official logo is added later by add_watermark().
     """
-    try:
-        title = clean_text(news.get("kur_title", news.get("title", "NEWS")))
-        body = clean_text(news.get("body", news.get("summary", "")))
-        source = clean_text(news.get("source", ""))
+    title = clean_text(news.get("kur_title", news.get("title", "NEWS")))
+    body = clean_text(news.get("body", news.get("summary", "")))
+    source = clean_text(news.get("source", ""))
+    article_url = clean_text(news.get("link", ""))
 
-        prompt = f"""
-Create a premium professional editorial news image for a Kurdish news page.
+    # Keep the prompt focused. Gemini 3 image models work best with clear,
+    # direct instructions rather than a long list of conflicting constraints.
+    prompt = f"""
+Create a premium editorial news photograph for a Kurdish digital news outlet.
 
-HEADLINE:
+Story headline:
 {title}
 
-SUMMARY:
+Story summary:
 {body}
 
-SOURCE:
+Source:
 {source}
 
-Requirements:
-- 16:9 horizontal landscape composition for a Facebook news post.
-- Photorealistic, premium editorial-news photography style.
-- Visually represent the actual event described by the headline and summary.
-- Realistic lighting, strong composition, natural colors, high detail.
-- Do not invent identifiable real people.
-- Do NOT add any text, letters, headline, caption, logo, watermark, brand mark,
-  channel logo, badge, UI, screenshot, or social-media element.
-- Do NOT create an ASO NEWS logo. The ASO NEWS logo will be added separately
-  by the program exactly once after generation.
-- Leave a little clean space in the lower-right area for the external logo.
-- Do not make the image look like a poster or template; make it look like a
-  high-quality editorial news visual.
+Reference article:
+{article_url}
+
+Visual direction:
+- Create a believable, photorealistic editorial-news scene that clearly
+  communicates the story above.
+- Treat the image as an editorial reconstruction, NOT as a claim that this is
+  an exact photograph of the real event.
+- If the story involves officials or political meetings, show a realistic
+  government/meeting environment, podium, conference table, security setting,
+  vehicles, government buildings, or other relevant contextual visuals instead
+  of inventing a recognizable person's face.
+- If a person must appear, keep them generic/unidentifiable unless the prompt
+  explicitly provides a reference image.
+- Premium international-news photography look: realistic lens, natural skin
+  and materials, believable lighting, documentary composition, crisp detail,
+  subtle depth of field, restrained color grading.
+- Strong focal subject, clean hierarchy, and visual storytelling suitable for
+  a professional Facebook news post.
+- 16:9 landscape.
+
+Absolutely do not include:
+- any words, letters, headlines, captions, numbers, signs, or readable text
+- any logo, watermark, ASO NEWS mark, brand mark, badge, UI, screenshot,
+  social-media frame, poster layout, or template
+- fake news-channel graphics or decorative title boxes
+- exaggerated fantasy/cinematic effects
+
+The final output must look like a high-end editorial news photograph, not a
+Canva template or generic graphic.
 """.strip()
 
-        print("🤖 Gemini professional image generation starts...")
-        print(f"🎨 IMAGE MODEL: {GEMINI_IMAGE_MODEL}")
+    for attempt in range(1, 3):
+        try:
+            print("\n" + "=" * 64)
+            print(f"🎨 NANO BANANA PRO — IMAGE ATTEMPT {attempt}/2")
+            print(f"🎨 IMAGE MODEL: {GEMINI_IMAGE_MODEL}")
 
-        interaction = client.interactions.create(
-            model=GEMINI_IMAGE_MODEL,
-            input=prompt,
-            response_format={
-                "type": "image",
-                "mime_type": "image/jpeg",
-                "aspect_ratio": "16:9",
-                "image_size": "2K",
-            },
-        )
-
-        image_data = getattr(
-            getattr(interaction, "output_image", None),
-            "data",
-            None,
-        )
-
-        if not image_data:
-            print("⚠️ Gemini image هیچ داتای وێنەیەکی نەگەڕاندەوە.")
-            return None
-
-        if isinstance(image_data, str):
-            image_data = base64.b64decode(image_data)
-
-        with open(filename, "wb") as f:
-            f.write(image_data)
-
-        with Image.open(filename) as generated:
-            generated.verify()
-
-        # Normalize the generated image to the Facebook size used by the page.
-        with Image.open(filename).convert("RGB") as generated:
-            generated = fit_cover(generated, (1200, 675))
-            generated.save(filename, "JPEG", quality=95, optimize=True)
-
-        print("✅ Gemini وێنەی پڕۆفیشنالی دروست کرد.")
-        return filename
-
-    except Exception as e:
-        print(f"⚠️ Gemini image generation failed: {e}")
-        return None
-
-def create_fallback_image(title, filename=IMAGE_FILE):
-    """Create a clean professional ASO NEWS graphic as the last fallback."""
-    try:
-        width, height = 1200, 675
-        image = Image.new("RGB", (width, height), (11, 12, 17))
-        draw = ImageDraw.Draw(image)
-
-        for r in range(80, 650, 55):
-            draw.ellipse(
-                [width - r, -r // 2, width + r, r // 2],
-                outline=(55, 58, 70),
-                width=2
+            interaction = client.interactions.create(
+                model=GEMINI_IMAGE_MODEL,
+                input=prompt,
+                tools=[{"type": "google_search"}],
+                response_format={
+                    "type": "image",
+                    "aspect_ratio": "16:9",
+                    "image_size": "2K",
+                },
             )
 
-        draw.rectangle([0, 0, width, 12], fill=(220, 30, 45))
-        draw.rectangle([0, height - 12, width, height], fill=(220, 30, 45))
+            output_image = getattr(interaction, "output_image", None)
+            image_data = getattr(output_image, "data", None)
 
-        brand = find_font(42, bold=True)
-        sub = find_font(24, bold=False)
-        title_font = find_font(42, bold=True)
+            if not image_data:
+                print("⚠️ Nano Banana Pro بەڵگەی وێنەی نەگەڕاندەوە.")
+                continue
 
-        draw.text((55, 48), "NEWS", font=brand, fill=(255, 255, 255))
-        draw.text(
-            (58, 105),
-            "KURDISTAN  •  IRAQ  •  WORLD",
-            font=sub,
-            fill=(220, 30, 45)
-        )
+            if isinstance(image_data, str):
+                image_data = base64.b64decode(image_data)
 
-        draw.rounded_rectangle(
-            [55, 165, 250, 215],
-            radius=18,
-            fill=(220, 30, 45),
-            outline=(255, 255, 255),
-            width=1
-        )
-        draw.text(
-            (80, 174),
-            "NEWS",
-            font=find_font(24, bold=True),
-            fill=(255, 255, 255)
-        )
+            with Image.open(BytesIO(image_data)) as generated:
+                generated = generated.convert("RGB")
+                generated = fit_cover(generated, (1200, 675))
+                generated.save(filename, "JPEG", quality=96, optimize=True)
 
-        panel = [55, 245, width - 55, height - 65]
-        draw.rounded_rectangle(
-            panel,
-            radius=28,
-            fill=(24, 25, 32),
-            outline=(220, 30, 45),
-            width=3
-        )
+            # Verify the file can be reopened after saving.
+            with Image.open(filename) as check:
+                check.verify()
 
-        clean_title = clean_text(title)
-        lines = wrap_text(draw, clean_title, title_font, width - 180)[:3]
-        if not lines:
-            lines = ["NEWS"]
+            print("✅ Nano Banana Pro وێنەی پڕۆفیشنالی دروست کرد.")
+            return filename
 
-        total_h = len(lines) * 58
-        y = panel[1] + ((panel[3] - panel[1] - total_h) // 2)
+        except Exception as e:
+            print(f"⚠️ Nano Banana Pro image error (attempt {attempt}): {e}")
+            if attempt < 2:
+                time.sleep(3)
 
-        for line in lines:
-            draw.text(
-                (width - 95, y),
-                line,
-                font=title_font,
-                fill=(255, 255, 255),
-                anchor="ra",
-                stroke_width=1,
-                stroke_fill=(0, 0, 0)
-            )
-            y += 58
-
-        image.save(filename, "JPEG", quality=95, optimize=True)
-        print("⚠️ گرافیکی fallback ـی ASO NEWS دروست کرا.")
-        return filename
-
-    except Exception as e:
-        print(f"❌ fallback error: {e}")
-        return None
-
+    print("❌ دوو هەوڵی Nano Banana Pro سەرکەوتوو نەبوون.")
+    return None
 
 def prepare_image(news):
     candidates = []
@@ -1357,13 +1298,13 @@ def prepare_image(news):
     else:
         print("⚠️ هیچ وێنەیەکی ڕاستەقینەی گونجاو نەدۆزرایەوە.")
 
-        # NEW: event-specific Gemini image before generic fallback.
+        # Generate a real editorial visual with Nano Banana Pro.
+        # Do NOT fall back to the old generic template: a bad visual is worse
+        # than skipping the post.
         image_file = create_ai_news_image(news)
 
         if not image_file:
-            image_file = create_fallback_image(
-                news.get("kur_title", news.get("title", "ASO NEWS"))
-            )
+            print("❌ هیچ وێنەیەکی پڕۆفیشنالی بەردەست نییە؛ ئەم run ـە پۆست ناکرێت.")
 
     if image_file:
         image_file = add_watermark(image_file)
@@ -1599,6 +1540,10 @@ def main():
     remove_old_image()
 
     image_file = prepare_image(news)
+
+    if not image_file and not news.get("video_url"):
+        print("❌ وێنەی پڕۆفیشنالی بەردەست نییە؛ پۆستی بێ وێنە نانێرین.")
+        return
 
     video_url = news.get("video_url")
     post_id = None
