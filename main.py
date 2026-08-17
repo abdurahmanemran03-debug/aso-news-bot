@@ -65,7 +65,7 @@ GRAPH_VERSION = os.environ.get(
 HISTORY_FILE = "posted_news.json"
 LOGO_FILE = "logo.png"
 IMAGE_FILE = "news_image.jpg"
-FALLBACK_BACKGROUND_FILE = "fallback_background.jpg"
+FALLBACK_BACKGROUND_FILE = os.environ.get("FALLBACK_BACKGROUND_FILE", "background.png")
 
 MAX_HISTORY = 2000
 MAX_CANDIDATES = 30
@@ -1773,12 +1773,31 @@ def create_fallback_background(
     لەسەری دادەنرێت.
     """
 
-    if not os.path.exists(
-        FALLBACK_BACKGROUND_FILE
-    ):
+    fallback_candidates = [
+        FALLBACK_BACKGROUND_FILE,
+        "background.png",
+        "fallback_background.jpg",
+        "fallback_background.jpeg",
+        "fallback_background.png",
+    ]
+
+    background_file = next(
+        (
+            path
+            for path in fallback_candidates
+            if path and os.path.exists(path)
+        ),
+        None,
+    )
+
+    if not background_file:
         print(
-            "❌ fallback_background.jpg "
+            "❌ هیچ fallback background ـێک "
             "نەدۆزرایەوە."
+        )
+        print(
+            "ℹ️ ناوی پێویست: background.png "
+            "یان fallback_background.jpg"
         )
         return None
 
@@ -1790,7 +1809,7 @@ def create_fallback_background(
         )
 
         background = Image.open(
-            FALLBACK_BACKGROUND_FILE
+            background_file
         ).convert("RGB")
 
         background = fit_cover(
