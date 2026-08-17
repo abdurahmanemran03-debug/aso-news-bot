@@ -26,14 +26,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests feedparser pillow google-genai huggingface_hub
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-core
+          pip install requests feedparser pillow google-genai
 
       - name: Run ASO NEWS
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
           POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python main.py
 
