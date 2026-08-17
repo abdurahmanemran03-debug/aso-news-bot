@@ -69,6 +69,11 @@ LOGO_FILE = "logo.png"
 IMAGE_FILE = "news_image.jpg"
 FALLBACK_BACKGROUND_FILE = os.environ.get("FALLBACK_BACKGROUND_FILE", "background.png")
 
+# Facebook-friendly portrait template: keep the user's full background visible.
+IMAGE_WIDTH = 1080
+IMAGE_HEIGHT = 1440
+USE_TEMPLATE_BACKGROUND = True
+
 MAX_HISTORY = 2000
 MAX_CANDIDATES = 30
 MAX_AGE_HOURS = 48
@@ -917,6 +922,9 @@ def generate_kurdish_news(
 6. ناوی کەس و شوێن بە دروستی بنووسە.
 7. هەواڵەکە بە کوردی سۆرانییەکی
 پاک و پیشەیی بنووسە.
+8. TITLE زۆر کورت بێت: تەنها 4 تا 8 وشە،
+باشترە لە 54 پیت تێپەڕ نەکات، چونکە لە
+وێنەکەدا بە شێوەی ناونیشانی پاک دەنوسرێت.
 
 OUTPUT تەنها:
 
@@ -1442,12 +1450,12 @@ def download_image_candidates(candidates):
 
 FONT_BOLD_FILE = os.environ.get(
     "ASO_FONT_BOLD",
-    "/usr/share/fonts/truetype/noto/NotoKufiArabic-Bold.ttf"
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf"
 )
 
 FONT_REGULAR_FILE = os.environ.get(
     "ASO_FONT_REGULAR",
-    "/usr/share/fonts/truetype/noto/NotoKufiArabic-Regular.ttf"
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf"
 )
 
 
@@ -1476,6 +1484,63 @@ def shape_text(text):
     return clean_text(text)
 
 
+def shorten_headline(text, max_chars=54):
+    """Keep the graphic headline short, clean and readable."""
+    text = clean_text(text)
+    text = re.sub(r"[\u200e\u200f]", "", text)
+    text = re.sub(r"[.،؛:!?]+$", "", text).strip()
+
+    if len(text) <= max_chars:
+        return text
+
+    words = text.split()
+    result = []
+    length = 0
+    for word in words:
+        extra = len(word) + (1 if result else 0)
+        if length + extra > max_chars:
+            break
+        result.append(word)
+        length += extra
+
+    return " ".join(result) if result else text[:max_chars].rstrip()
+
+
+def draw_calendar_icon(draw, x, y, size=42):
+    """Small clean calendar icon matching the ASO NEWS orange/navy palette."""
+    navy = (8, 30, 50, 255)
+    orange = (246, 88, 18, 255)
+    draw.rounded_rectangle(
+        [x, y, x + size, y + size],
+        radius=7,
+        outline=navy,
+        width=3,
+    )
+    draw.rectangle(
+        [x + 2, y + 2, x + size - 2, y + 12],
+        fill=orange,
+    )
+    draw.line(
+        [(x + 11, y - 2), (x + 11, y + 7)],
+        fill=navy,
+        width=4,
+    )
+    draw.line(
+        [(x + size - 11, y - 2), (x + size - 11, y + 7)],
+        fill=navy,
+        width=4,
+    )
+    cell = max(5, size // 7)
+    for row in range(2):
+        for col in range(3):
+            cx = x + 9 + col * (cell + 5)
+            cy = y + 19 + row * (cell + 7)
+            draw.rectangle(
+                [cx, cy, cx + cell, cy + cell],
+                fill=(120, 135, 148, 220),
+            )
+
+
 # ============================================================
 # 🖋️ FONT
 # ============================================================
@@ -1485,12 +1550,12 @@ def find_font(size, bold=False):
 
     paths = [
         preferred,
-        "/usr/share/fonts/truetype/noto/NotoKufiArabic-Bold.ttf"
-        if bold else
-        "/usr/share/fonts/truetype/noto/NotoKufiArabic-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf"
         if bold else
         "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoKufiArabic-Bold.ttf"
+        if bold else
+        "/usr/share/fonts/truetype/noto/NotoKufiArabic-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         if bold else
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -1815,7 +1880,7 @@ def fit_background_full(image, size):
 
 
 def create_fallback_background(news, output_file=IMAGE_FILE):
-    """Create the ASO NEWS branded fallback image with full background + date."""
+    """Create the clean ASO NEWS portrait graphic from the user's own background."""
     fallback_candidates = [
         FALLBACK_BACKGROUND_FILE,
         "background.png",
@@ -1830,120 +1895,125 @@ def create_fallback_background(news, output_file=IMAGE_FILE):
     )
 
     if not background_file:
-        print("❌ هیچ fallback background ـێک نەدۆزرایەوە.")
+        print("❌ background.png نەدۆزرایەوە.")
         return None
 
     try:
         print("\n" + "=" * 64)
-        print("🆘 ASO NEWS — BACKGROUND FALLBACK v11")
+        print("🎨 ASO NEWS — CLEAN TEMPLATE v12")
 
         background = Image.open(background_file).convert("RGB")
-        background = fit_background_full(background, (1200, 675))
-        width, height = background.size
-
-        title = shape_text(
-            news.get("kur_title", news.get("title", "ASO NEWS"))
+        # The source template is portrait. Resize it to a 3:4 Facebook-friendly canvas
+        # without the old landscape crop that was hiding most of the design.
+        background = ImageOps.fit(
+            background,
+            (IMAGE_WIDTH, IMAGE_HEIGHT),
+            method=Image.LANCZOS,
+            centering=(0.5, 0.5),
         )
-        date_text = format_kurdish_date()
 
+        width, height = background.size
         overlay = Image.new("RGBA", background.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
 
-        # A subtle top veil keeps the date readable without hiding the background.
-        draw.rectangle([0, 0, width, 78], fill=(7, 18, 31, 115))
+        navy = (8, 30, 50, 255)
+        orange = (246, 88, 18, 255)
 
-        # Date badge.
-        date_font = find_font(25, bold=True)
-        date_box_w = 315
-        date_box_h = 50
-        date_x1 = 42
-        date_y1 = 18
-        draw.rounded_rectangle(
-            [date_x1, date_y1, date_x1 + date_box_w, date_y1 + date_box_h],
-            radius=18,
-            fill=(210, 25, 43, 235),
-        )
+        # --------------------------------------------------------
+        # DATE — small, clean, top-right, no box
+        # --------------------------------------------------------
+        date_text = format_kurdish_date()
+        date_font = find_font(30, bold=True)
+        icon_size = 42
+        icon_x = width - 70
+        icon_y = 78
+        draw_calendar_icon(draw, icon_x, icon_y, icon_size)
+
         draw_rtl_text(
             draw,
-            (date_x1 + date_box_w - 16, date_y1 + date_box_h // 2),
+            (icon_x - 18, icon_y + 21),
             date_text,
             date_font,
-            (255, 255, 255, 255),
+            navy,
             anchor="rm",
         )
 
-        # Small ASO NEWS label.
-        brand_font = find_font(27, bold=True)
-        draw_rtl_text(
+        # --------------------------------------------------------
+        # HEADLINE — short, small, centered and slightly above
+        # center. No card, no border, no white rectangle.
+        # --------------------------------------------------------
+        raw_title = news.get(
+            "kur_title",
+            news.get("title", "ASO NEWS")
+        )
+        title = shorten_headline(raw_title, 54)
+
+        title_size = 54
+        title_font = find_font(title_size, bold=True)
+        max_width = int(width * 0.68)
+
+        lines = wrap_text(
             draw,
-            (width - 42, 43),
-            "ASO NEWS",
-            brand_font,
-            (255, 255, 255, 255),
-            anchor="rm",
+            title,
+            title_font,
+            max_width,
         )
 
-        title_font = find_font(48, bold=True)
-        max_width = width - 190
-        lines = wrap_text(draw, title, title_font, max_width)[:4]
+        # Keep the visual compact. If it still needs three lines, reduce the font.
+        if len(lines) > 2:
+            title_size = 48
+            title_font = find_font(title_size, bold=True)
+            lines = wrap_text(draw, title, title_font, max_width)[:2]
 
-        line_height = 61
-        padding_x = 42
-        padding_y = 28
-        box_height = len(lines) * line_height + padding_y * 2 + 52
-        box_top = int((height - box_height) / 2 + 24)
-        box_bottom = box_top + box_height
+        line_height = int(title_size * 1.42)
+        center_x = width // 2
+        center_y = int(height * 0.44)
+        total_height = len(lines) * line_height
+        first_y = center_y - total_height // 2
 
-        # More transparent card so the whole background remains visible.
-        draw.rounded_rectangle(
-            [padding_x, box_top, width - padding_x, box_bottom],
-            radius=28,
-            fill=(255, 255, 255, 218),
-            outline=(10, 28, 48, 245),
-            width=4,
-        )
-
-        # Red accent line.
-        draw.rounded_rectangle(
-            [padding_x + 22, box_top + 18, width - padding_x - 22, box_top + 24],
-            radius=3,
-            fill=(210, 25, 43, 255),
-        )
-
-        y = box_top + padding_y + 34
-        for line in lines:
+        for index, line in enumerate(lines):
             draw_rtl_text(
                 draw,
-                (width // 2, y),
+                (center_x, first_y + index * line_height),
                 line,
                 title_font,
-                (8, 25, 43, 255),
+                navy,
                 anchor="ma",
-                stroke_width=0,
+                stroke_width=1,
+                stroke_fill=(255, 255, 255, 130),
             )
-            y += line_height
 
-        # Date also appears below the headline as a news-card metadata line.
-        meta_font = find_font(23, bold=False)
-        draw_rtl_text(
-            draw,
-            (width // 2, box_bottom - 25),
-            date_text,
-            meta_font,
-            (80, 90, 105, 255),
-            anchor="ms",
+        # Small orange accent line under the headline.
+        accent_y = first_y + total_height + 22
+        accent_w = 120
+        draw.rounded_rectangle(
+            [
+                center_x - accent_w // 2,
+                accent_y,
+                center_x + accent_w // 2,
+                accent_y + 6,
+            ],
+            radius=3,
+            fill=orange,
         )
 
         result = Image.alpha_composite(
-            background.convert("RGBA"), overlay
+            background.convert("RGBA"),
+            overlay,
         ).convert("RGB")
 
-        result.save(output_file, "JPEG", quality=95, optimize=True)
-        print("✅ Fallback background v11 ئامادە کرا — background تەواو دیارە + تاریخ زیادکرا.")
+        result.save(
+            output_file,
+            "JPEG",
+            quality=96,
+            optimize=True,
+        )
+
+        print("✅ وێنەی نوێ: background ـی خۆت + headline ـی کورت + تاریخ + فۆنتی پاک")
         return output_file
 
     except Exception as e:
-        print(f"❌ fallback background error: {e}")
+        print(f"❌ template background error: {e}")
         return None
 
 
@@ -2509,100 +2579,51 @@ def create_ai_news_image(
 # ============================================================
 
 def prepare_image(news):
+    """Prepare the Facebook image using the fixed ASO NEWS template style."""
+    if USE_TEMPLATE_BACKGROUND:
+        # The user's background already contains the ASO NEWS logos,
+        # so do NOT add a second watermark on top of it.
+        return create_fallback_background(news)
+
+    # Legacy real-image/AI pipeline kept available when template mode is disabled.
     candidates = []
 
     if news.get("image_url"):
-        candidates.append(
-            news["image_url"]
-        )
+        candidates.append(news["image_url"])
 
     article_url = news.get("link")
-
     if article_url:
         try:
-            candidates.extend(
-                get_article_images(
-                    article_url
-                )
-            )
+            candidates.extend(get_article_images(article_url))
         except Exception:
             pass
 
-    candidates = list(
-        dict.fromkeys(candidates)
-    )
+    candidates = list(dict.fromkeys(candidates))
 
     print("\n" + "=" * 64)
-    print(
-        "📸 بەدوای وێنەی "
-        "ڕاستەقینەدا دەگەڕێین..."
-    )
+    print("📸 بەدوای وێنەی ڕاستەقینەدا دەگەڕێین...")
 
-    best = download_image_candidates(
-        candidates
-    )
+    best = download_image_candidates(candidates)
 
     if best:
         try:
-            with open(
+            with open(IMAGE_FILE, "wb") as f:
+                f.write(best["data"])
+
+            image_file = add_professional_overlay(
                 IMAGE_FILE,
-                "wb"
-            ) as f:
-                f.write(
-                    best["data"]
-                )
-
-            print(
-                f"📐 وێنە: "
-                f"{best['width']}x"
-                f"{best['height']}"
+                news.get("kur_title", news.get("title", "ASO NEWS")),
             )
-
-            image_file = (
-                add_professional_overlay(
-                    IMAGE_FILE,
-                    news.get(
-                        "kur_title",
-                        news.get(
-                            "title",
-                            "ASO NEWS"
-                        )
-                    )
-                )
-            )
-
         except Exception as e:
-            print(
-                f"⚠️ image error: {e}"
-            )
+            print(f"⚠️ image error: {e}")
             image_file = None
-
     else:
-        print(
-            "⚠️ وێنەی ڕاستەقینە "
-            "نەدۆزرایەوە."
-        )
-
-        image_file = create_ai_news_image(
-            news
-        )
-
+        image_file = create_ai_news_image(news)
         if not image_file:
-            print(
-                "⚠️ AI image "
-                "نەدروست بوو."
-            )
-
-            image_file = (
-                create_fallback_background(
-                    news
-                )
-            )
+            image_file = create_fallback_background(news)
 
     if image_file:
-        image_file = add_watermark(
-            image_file
-        )
+        image_file = add_watermark(image_file)
 
     return image_file
 
