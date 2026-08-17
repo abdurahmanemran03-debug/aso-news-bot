@@ -7,11 +7,13 @@ import html
 import time
 from urllib.parse import quote, urljoin
 from io import BytesIO
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 import feedparser
 
-from PIL import Image, ImageEnhance, ImageDraw, ImageFont
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont, ImageOps, ImageFilter
 from google import genai
 
 try:
@@ -1435,41 +1437,69 @@ def download_image_candidates(candidates):
 
 
 # ============================================================
+# 🖋️ FONT + DATE
+# ============================================================
+
+FONT_BOLD_FILE = os.environ.get(
+    "ASO_FONT_BOLD",
+    "/usr/share/fonts/truetype/noto/NotoKufiArabic-Bold.ttf"
+)
+
+FONT_REGULAR_FILE = os.environ.get(
+    "ASO_FONT_REGULAR",
+    "/usr/share/fonts/truetype/noto/NotoKufiArabic-Regular.ttf"
+)
+
+
+def format_kurdish_date():
+    """Return today's Baghdad date in a compact Kurdish format."""
+    now = datetime.now(ZoneInfo("Asia/Baghdad"))
+    months = {
+        1: "کانوونی دووەم",
+        2: "شوبات",
+        3: "ئازار",
+        4: "نیسان",
+        5: "ئایار",
+        6: "حوزەیران",
+        7: "تەمموز",
+        8: "ئاب",
+        9: "ئەیلول",
+        10: "تشرینی یەکەم",
+        11: "تشرینی دووەم",
+        12: "کانوونی یەکەم",
+    }
+    return f"{now.day}ی {months[now.month]} {now.year}"
+
+
+def shape_text(text):
+    # Pillow's RAQM support handles Kurdish/Arabic shaping and RTL layout.
+    return clean_text(text)
+
+
+# ============================================================
 # 🖋️ FONT
 # ============================================================
 
 def find_font(size, bold=False):
-    bold_paths = [
-        "/usr/share/fonts/truetype/noto/"
-        "NotoSansArabic-Bold.ttf",
-        "/usr/share/fonts/opentype/noto/"
-        "NotoSansArabic-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/"
-        "DejaVuSans-Bold.ttf",
-    ]
+    preferred = FONT_BOLD_FILE if bold else FONT_REGULAR_FILE
 
-    regular_paths = [
-        "/usr/share/fonts/truetype/noto/"
-        "NotoSansArabic-Regular.ttf",
-        "/usr/share/fonts/opentype/noto/"
-        "NotoSansArabic-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/"
-        "DejaVuSans.ttf",
+    paths = [
+        preferred,
+        "/usr/share/fonts/truetype/noto/NotoKufiArabic-Bold.ttf"
+        if bold else
+        "/usr/share/fonts/truetype/noto/NotoKufiArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf"
+        if bold else
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        if bold else
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ]
-
-    paths = (
-        bold_paths
-        if bold
-        else regular_paths
-    )
 
     for path in paths:
         if os.path.exists(path):
             try:
-                return ImageFont.truetype(
-                    path,
-                    size
-                )
+                return ImageFont.truetype(path, size)
             except Exception:
                 pass
 
@@ -1529,40 +1559,26 @@ def fit_cover(image, size):
     )
 
 
-def wrap_text(
-    draw,
-    text,
-    font,
-    max_width
-):
+def wrap_text(draw, text, font, max_width):
     words = text.split()
     lines = []
     current = ""
 
     for word in words:
-        test = (
-            word
-            if not current
-            else current
-            + " "
-            + word
-        )
-
+        test = word if not current else current + " " + word
         bbox = draw.textbbox(
             (0, 0),
             test,
-            font=font
+            font=font,
+            direction="rtl",
+            language="ku",
         )
 
-        if (
-            bbox[2] - bbox[0]
-            <= max_width
-        ):
+        if bbox[2] - bbox[0] <= max_width:
             current = test
         else:
             if current:
                 lines.append(current)
-
             current = word
 
     if current:
@@ -1574,6 +1590,20 @@ def wrap_text(
 # ============================================================
 # 🎨 PROFESSIONAL OVERLAY
 # ============================================================
+def draw_rtl_text(draw, xy, text, font, fill, anchor="ra", stroke_width=0, stroke_fill=None):
+    kwargs = {
+        "font": font,
+        "fill": fill,
+        "anchor": anchor,
+        "direction": "rtl",
+        "language": "ku",
+        "stroke_width": stroke_width,
+    }
+    if stroke_fill is not None:
+        kwargs["stroke_fill"] = stroke_fill
+    draw.text(xy, shape_text(text), **kwargs)
+
+
 
 def add_professional_overlay(
     image_file,
@@ -1585,7 +1615,7 @@ def add_professional_overlay(
             image_file
         ).convert("RGB")
 
-        image = fit_cover(
+        image = fit_background_full(
             image,
             (1200, 675)
         )
@@ -1706,30 +1736,33 @@ def add_professional_overlay(
         y = box_top + 35
 
         for line in lines:
-            draw.text(
-                (
-                    width - 60,
-                    y
-                ),
+            draw_rtl_text(
+                draw,
+                (width - 60, y),
                 line,
-                font=title_font,
-                fill=(
-                    255,
-                    255,
-                    255,
-                    255
-                ),
+                title_font,
+                (255, 255, 255, 255),
                 anchor="ra",
                 stroke_width=1,
-                stroke_fill=(
-                    0,
-                    0,
-                    0,
-                    220
-                )
+                stroke_fill=(0, 0, 0, 220),
             )
 
             y += line_height
+
+        date_font = find_font(22, bold=True)
+        draw.rounded_rectangle(
+            [40, 25, 310, 70],
+            radius=16,
+            fill=(210, 25, 43, 225),
+        )
+        draw_rtl_text(
+            draw,
+            (295, 47),
+            format_kurdish_date(),
+            date_font,
+            (255, 255, 255, 255),
+            anchor="rm",
+        )
 
         result = Image.alpha_composite(
             image.convert("RGBA"),
@@ -1762,17 +1795,27 @@ def add_professional_overlay(
 # 🆘 FALLBACK BACKGROUND
 # ============================================================
 
-def create_fallback_background(
-    news,
-    output_file=IMAGE_FILE
-):
-    """
-    ئەگەر هیچ وێنەی ڕاستەقینە یان AI
-    بەردەست نەبوو، ئەم background ـە
-    دەخرێتە سەر پۆست و ناونیشانی هەواڵ
-    لەسەری دادەنرێت.
-    """
+def fit_background_full(image, size):
+    """Show the whole background without cropping it."""
+    target_w, target_h = size
+    image = image.convert("RGB")
 
+    # Create a softly blurred copy as the full-frame backdrop.
+    blurred = ImageOps.fit(image, size, method=Image.LANCZOS).filter(
+        ImageFilter.GaussianBlur(18)
+    )
+    blurred = ImageEnhance.Brightness(blurred).enhance(0.72)
+
+    # Fit the original image inside the frame, preserving all of it.
+    contained = ImageOps.contain(image, size, method=Image.LANCZOS)
+    x = (target_w - contained.width) // 2
+    y = (target_h - contained.height) // 2
+    blurred.paste(contained, (x, y))
+    return blurred
+
+
+def create_fallback_background(news, output_file=IMAGE_FILE):
+    """Create the ASO NEWS branded fallback image with full background + date."""
     fallback_candidates = [
         FALLBACK_BACKGROUND_FILE,
         "background.png",
@@ -1782,197 +1825,125 @@ def create_fallback_background(
     ]
 
     background_file = next(
-        (
-            path
-            for path in fallback_candidates
-            if path and os.path.exists(path)
-        ),
+        (path for path in fallback_candidates if path and os.path.exists(path)),
         None,
     )
 
     if not background_file:
-        print(
-            "❌ هیچ fallback background ـێک "
-            "نەدۆزرایەوە."
-        )
-        print(
-            "ℹ️ ناوی پێویست: background.png "
-            "یان fallback_background.jpg"
-        )
+        print("❌ هیچ fallback background ـێک نەدۆزرایەوە.")
         return None
 
     try:
         print("\n" + "=" * 64)
-        print(
-            "🆘 ASO NEWS "
-            "— BACKGROUND FALLBACK"
-        )
+        print("🆘 ASO NEWS — BACKGROUND FALLBACK v11")
 
-        background = Image.open(
-            background_file
-        ).convert("RGB")
-
-        background = fit_cover(
-            background,
-            (1200, 675)
-        )
-
+        background = Image.open(background_file).convert("RGB")
+        background = fit_background_full(background, (1200, 675))
         width, height = background.size
 
-        title = clean_text(
-            news.get(
-                "kur_title",
-                news.get(
-                    "title",
-                    "ASO NEWS"
-                )
-            )
+        title = shape_text(
+            news.get("kur_title", news.get("title", "ASO NEWS"))
         )
+        date_text = format_kurdish_date()
 
-        overlay = Image.new(
-            "RGBA",
-            background.size,
-            (0, 0, 0, 0)
-        )
+        overlay = Image.new("RGBA", background.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
 
-        draw = ImageDraw.Draw(
-            overlay
-        )
+        # A subtle top veil keeps the date readable without hiding the background.
+        draw.rectangle([0, 0, width, 78], fill=(7, 18, 31, 115))
 
-        title_font = find_font(
-            46,
-            bold=True
-        )
-
-        max_width = width - 150
-
-        lines = wrap_text(
-            draw,
-            title,
-            title_font,
-            max_width
-        )
-
-        lines = lines[:5]
-
-        line_height = 58
-        padding = 35
-
-        box_height = (
-            len(lines)
-            * line_height
-            + 125
-        )
-
-        box_top = int(
-            (height - box_height) / 2
-        )
-
-        box_bottom = (
-            box_top
-            + box_height
-        )
-
-        # Semi-transparent white card
+        # Date badge.
+        date_font = find_font(25, bold=True)
+        date_box_w = 315
+        date_box_h = 50
+        date_x1 = 42
+        date_y1 = 18
         draw.rounded_rectangle(
-            [
-                55,
-                box_top,
-                width - 55,
-                box_bottom
-            ],
-            radius=24,
-            fill=(
-                255,
-                255,
-                255,
-                232
-            ),
-            outline=(
-                18,
-                38,
-                65,
-                255
-            ),
-            width=4
+            [date_x1, date_y1, date_x1 + date_box_w, date_y1 + date_box_h],
+            radius=18,
+            fill=(210, 25, 43, 235),
+        )
+        draw_rtl_text(
+            draw,
+            (date_x1 + date_box_w - 16, date_y1 + date_box_h // 2),
+            date_text,
+            date_font,
+            (255, 255, 255, 255),
+            anchor="rm",
         )
 
-        badge_font = find_font(
-            28,
-            bold=True
-        )
-
-        draw.text(
-            (
-                width // 2,
-                box_top + padding
-            ),
+        # Small ASO NEWS label.
+        brand_font = find_font(27, bold=True)
+        draw_rtl_text(
+            draw,
+            (width - 42, 43),
             "ASO NEWS",
-            font=badge_font,
-            fill=(
-                18,
-                38,
-                65,
-                255
-            ),
-            anchor="ma"
+            brand_font,
+            (255, 255, 255, 255),
+            anchor="rm",
         )
 
-        y = (
-            box_top
-            + padding
-            + 50
+        title_font = find_font(48, bold=True)
+        max_width = width - 190
+        lines = wrap_text(draw, title, title_font, max_width)[:4]
+
+        line_height = 61
+        padding_x = 42
+        padding_y = 28
+        box_height = len(lines) * line_height + padding_y * 2 + 52
+        box_top = int((height - box_height) / 2 + 24)
+        box_bottom = box_top + box_height
+
+        # More transparent card so the whole background remains visible.
+        draw.rounded_rectangle(
+            [padding_x, box_top, width - padding_x, box_bottom],
+            radius=28,
+            fill=(255, 255, 255, 218),
+            outline=(10, 28, 48, 245),
+            width=4,
         )
 
+        # Red accent line.
+        draw.rounded_rectangle(
+            [padding_x + 22, box_top + 18, width - padding_x - 22, box_top + 24],
+            radius=3,
+            fill=(210, 25, 43, 255),
+        )
+
+        y = box_top + padding_y + 34
         for line in lines:
-            draw.text(
-                (
-                    width // 2,
-                    y
-                ),
+            draw_rtl_text(
+                draw,
+                (width // 2, y),
                 line,
-                font=title_font,
-                fill=(
-                    10,
-                    22,
-                    40,
-                    255
-                ),
+                title_font,
+                (8, 25, 43, 255),
                 anchor="ma",
-                stroke_width=1,
-                stroke_fill=(
-                    255,
-                    255,
-                    255,
-                    255
-                )
+                stroke_width=0,
             )
-
             y += line_height
 
+        # Date also appears below the headline as a news-card metadata line.
+        meta_font = find_font(23, bold=False)
+        draw_rtl_text(
+            draw,
+            (width // 2, box_bottom - 25),
+            date_text,
+            meta_font,
+            (80, 90, 105, 255),
+            anchor="ms",
+        )
+
         result = Image.alpha_composite(
-            background.convert("RGBA"),
-            overlay
+            background.convert("RGBA"), overlay
         ).convert("RGB")
 
-        result.save(
-            output_file,
-            "JPEG",
-            quality=95,
-            optimize=True
-        )
-
-        print(
-            "✅ Fallback background "
-            "ئامادە کرا."
-        )
-
+        result.save(output_file, "JPEG", quality=95, optimize=True)
+        print("✅ Fallback background v11 ئامادە کرا — background تەواو دیارە + تاریخ زیادکرا.")
         return output_file
 
     except Exception as e:
-        print(
-            f"❌ fallback background error: {e}"
-        )
+        print(f"❌ fallback background error: {e}")
         return None
 
 
